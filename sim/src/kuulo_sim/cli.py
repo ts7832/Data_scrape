@@ -43,8 +43,17 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     run = SimulationRun(scenario, utc_now(), time_scale=args.speed)
-    with httpx.Client(base_url=args.server, timeout=5.0) as client:
-        stats = run_realtime(run, client, truth_path=args.truth)
+    try:
+        with httpx.Client(base_url=args.server, timeout=5.0) as client:
+            stats = run_realtime(run, client, truth_path=args.truth)
+    except httpx.HTTPStatusError as exc:
+        print(f"Server rejected {exc.request.url}: {exc.response.status_code} {exc.response.text}",
+              file=sys.stderr)
+        return 1
+    except httpx.ConnectError:
+        print(f"Could not connect to {args.server}. Is the server running? (make server)",
+              file=sys.stderr)
+        return 1
     print(f"{scenario.name}: sent {stats.sent}, rejected {stats.errors}")
     return 0 if stats.errors == 0 else 1
 

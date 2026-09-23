@@ -60,7 +60,7 @@ def to_utc_ms(value: datetime) -> datetime:
 
 
 class WireModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
 
 class Source(WireModel):
@@ -89,7 +89,10 @@ class EventRef(WireModel):
 
 
 class Acoustic(WireModel):
-    snr_db: float
+    # Bounded so a bad value can't make BasicFusion's 10 ** (snr_db / 20) weighting
+    # overflow (see the "extreme snr_db disables fusion" finding): -50..150 covers
+    # every realistic reading with wide margin on both sides.
+    snr_db: float = Field(ge=-50, le=150)
     peak_freq_hz: float = Field(ge=0)
 
 

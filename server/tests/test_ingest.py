@@ -13,6 +13,33 @@ def test_signed_observation_accepted(client, node):
     assert response.json() == {"status": "accepted", "late": False}
 
 
+def test_extreme_snr_db_rejected_over_http(client, node):
+    # Review finding: reproduced via a raw HTTP body (not just Python model
+    # construction), the same path a real attacker or buggy node would use.
+    obs = make_observation(node.node_id, observed_at=T0)
+    body = obs.model_dump(mode="json")
+    body["acoustic"]["snr_db"] = 1e4
+    response = client.post("/v1/observations", json=body)
+    assert response.status_code == 400
+
+
+def test_infinite_snr_db_rejected_over_http(client, node):
+    # httpx's own `json=` kwarg refuses to encode inf/nan client-side, so this
+    # sends a hand-built body over the wire the way a non-httpx caller could:
+    # a bare `Infinity` JSON literal, which Python's stdlib json module accepts
+    # by default (json.dumps(..., allow_nan=True) is the default).
+    import json as jsonlib
+
+    obs = make_observation(node.node_id, observed_at=T0)
+    body = obs.model_dump(mode="json")
+    body["acoustic"]["snr_db"] = float("inf")
+    response = client.post(
+        "/v1/observations", content=jsonlib.dumps(body),
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 400
+
+
 def test_retry_is_duplicate_not_double(client, node):
     obs = make_observation(node.node_id, observed_at=T0)
     post_signed(client, "/v1/observations", obs, node.private_key)

@@ -24,6 +24,16 @@ def test_all_bundled_scenarios_load_and_run():
         assert run_of(name).messages()
 
 
+def test_node_keys_stable_across_scenarios_sharing_a_node_id():
+    # Review finding: running the README's own two commands back-to-back
+    # ("make sim" then "make sim SCENARIO=false_alarm") re-registers "n01"
+    # with a different key each time and gets 409 Conflict, because keys used
+    # to be derived from (seed, node_id) instead of node_id alone.
+    a = run_of("single_node")
+    b = run_of("false_alarm")
+    assert a.node_keys["n01"] == b.node_keys["n01"]
+
+
 def test_deterministic_for_a_seed():
     a = [m.payload.model_dump_json() for m in run_of("helsinki_pass").messages()]
     b = [m.payload.model_dump_json() for m in run_of("helsinki_pass").messages()]

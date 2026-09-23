@@ -96,7 +96,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_request: Request, exc: RequestValidationError):
-        return JSONResponse(status_code=400, content={"detail": jsonable_encoder(exc.errors())})
+        # Drop "input": a rejected field can be a non-finite float (inf/nan), and
+        # Starlette's JSONResponse refuses to encode those, which turned a clean
+        # 400 into an unhandled 500 for exactly the malformed input this exists
+        # to reject. Callers get the location and reason; not the raw value back.
+        errors = [{k: v for k, v in error.items() if k != "input"} for error in exc.errors()]
+        return JSONResponse(status_code=400, content={"detail": jsonable_encoder(errors)})
 
     @app.exception_handler(IngestError)
     async def _ingest_error(_request: Request, exc: IngestError):

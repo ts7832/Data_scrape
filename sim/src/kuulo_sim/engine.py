@@ -68,8 +68,11 @@ class SimulationRun:
         self.scenario = scenario
         self.t0 = t0
         self.time_scale = time_scale
+        # Keyed by node id alone (not scenario.seed): several bundled scenarios reuse
+        # ids like "n01", and running them one after another against the same server
+        # (as the README does) must not re-register the same node with a new key.
         self.node_keys: dict[str, tuple[str, str]] = {
-            n.id: keypair_from_seed(hashlib.sha256(f"{scenario.seed}:{n.id}".encode()).digest())
+            n.id: keypair_from_seed(hashlib.sha256(n.id.encode()).digest())
             for n in scenario.nodes
         }
         self._messages: list[SimMessage] | None = None

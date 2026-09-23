@@ -34,6 +34,24 @@ def test_timestamp_normalised_to_utc_milliseconds():
     assert make_observation(observed_at=ts).observed_at.microsecond == 123000
 
 
+def test_extreme_snr_db_rejected():
+    # Review finding: an unbounded snr_db lets one observation (huge but finite,
+    # e.g. 1e4) cause an OverflowError deep inside fusion's 10 ** (snr / 20)
+    # weighting, silently disabling fusion for every observation grouped with it.
+    with pytest.raises(ValidationError):
+        make_observation(observed_at=T0, snr_db=1e4)
+
+
+def test_infinite_or_nan_snr_db_rejected():
+    # Review finding: a raw `Infinity`/`NaN` JSON literal is accepted by FastAPI's
+    # parser, stored, then fails to reload inside recent_observations — breaking
+    # fusion network-wide, not just for nearby nodes.
+    with pytest.raises(ValidationError):
+        make_observation(observed_at=T0, snr_db=float("inf"))
+    with pytest.raises(ValidationError):
+        make_observation(observed_at=T0, snr_db=float("nan"))
+
+
 def test_confidence_out_of_range_rejected():
     with pytest.raises(ValidationError):
         make_observation(observed_at=T0, confidence=1.5)

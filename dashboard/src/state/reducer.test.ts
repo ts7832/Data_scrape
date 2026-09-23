@@ -58,6 +58,14 @@ describe("reducer", () => {
     expect(s.pulses).toEqual([]);
   });
 
+  it("snapshot drops closed tracks (review finding: they stayed on the map)", () => {
+    const s = reducer(initialState, {
+      type: "snapshot", nodes: [], tracks: [track("t1", 60.17, "closed"), track("t2")],
+    });
+    expect(Object.keys(s.tracks)).toEqual(["t2"]);
+    expect(s.trails["t1"]).toBeUndefined();
+  });
+
   it("resync event does not change state", () => {
     const s = reducer(initialState, { type: "live", event: { type: "resync" }, receivedAt: 0 });
     expect(s).toBe(initialState);

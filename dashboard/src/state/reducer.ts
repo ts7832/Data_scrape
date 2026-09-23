@@ -47,12 +47,15 @@ function upsertTrack(state: State, track: Track): State {
 export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "snapshot": {
+      // The server's GET /v1/tracks intentionally still lists a track for a short
+      // while after it closes (evidence for other API consumers); the map must not.
+      const liveTracks = action.tracks.filter((t) => t.status !== "closed");
       const nodes = Object.fromEntries(action.nodes.map((n) => [n.node_id, n]));
-      const tracks = Object.fromEntries(action.tracks.map((t) => [t.track_id, t]));
+      const tracks = Object.fromEntries(liveTracks.map((t) => [t.track_id, t]));
       const trails = Object.fromEntries(
         Object.entries(state.trails).filter(([id]) => id in tracks),
       );
-      for (const t of action.tracks) {
+      for (const t of liveTracks) {
         if (!trails[t.track_id]) trails[t.track_id] = [[t.position.lon, t.position.lat]];
       }
       const selectedTrackId = state.selectedTrackId && state.selectedTrackId in tracks ? state.selectedTrackId : null;

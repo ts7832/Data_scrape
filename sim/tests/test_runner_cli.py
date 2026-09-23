@@ -60,3 +60,40 @@ def test_cli_invalid_scenario_names_the_field(tmp_path, capsys):
     assert main(["run", str(bad)]) == 2
     err = capsys.readouterr().err
     assert "Invalid scenario" in err and "nodes.0.lat" in err
+
+
+_RealClient = httpx.Client
+
+
+def test_cli_prints_friendly_message_on_registration_conflict(monkeypatch, capsys):
+    # Review finding: a 409 from re-registering a node (e.g. running two scenarios
+    # that share a node id back-to-back) used to crash with a raw traceback.
+    def handler(request: httpx.Request) -> httpx.Response:
+        detail = "node_id already registered with a different key"
+        return httpx.Response(409, json={"detail": detail})
+
+    def fake_client(*args, **kwargs):
+        return _RealClient(base_url=kwargs.get("base_url", "http://test"),
+                           transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(httpx, "Client", fake_client)
+    exit_code = main(["run", "single_node"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "409" in err
+    assert "Traceback" not in err  # a friendly message, not a raw exception dump
+
+
+def test_cli_prints_friendly_message_when_server_unreachable(monkeypatch, capsys):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    def fake_client(*args, **kwargs):
+        return _RealClient(base_url=kwargs.get("base_url", "http://test"),
+                           transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(httpx, "Client", fake_client)
+    exit_code = main(["run", "single_node"])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "running" in err.lower()

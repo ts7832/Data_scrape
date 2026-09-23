@@ -1,0 +1,10 @@
+name: node_failure
+seed: 3
+duration_s: 100
+nodes:
+  - {id: n01, lat: 60.1699, lon: 24.9384}
+  - {id: n02, lat: 60.1699, lon: 24.94291}
+false_alarms:
+  - {lat: 60.1699, lon: 24.9384, radius_m: 50, start_s: 10, duration_s: 60, confidence: 0.9}
+node_failures:
+  - {node_id: n02}

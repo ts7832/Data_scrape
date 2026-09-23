@@ -1,0 +1,10 @@
+name: single_node
+seed: 1
+duration_s: 150
+nodes:
+  - {id: n01, lat: 60.1699, lon: 24.9384}
+drones:
+  - id: d1
+    speed_mps: 15
+    start_s: 5
+    waypoints: [[60.1699, 24.9200], [60.1699, 24.9570]]

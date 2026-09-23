@@ -1,0 +1,13 @@
+name: two_drones
+seed: 11
+duration_s: 130
+nodes:
+  - {id: a1, lat: 60.1699, lon: 24.9384}
+  - {id: a2, lat: 60.1699, lon: 24.9438}
+  - {id: a3, lat: 60.1726, lon: 24.9411}
+  - {id: b1, lat: 60.1699, lon: 25.0286}
+  - {id: b2, lat: 60.1699, lon: 25.0340}
+  - {id: b3, lat: 60.1726, lon: 25.0313}
+drones:
+  - {id: d1, speed_mps: 15, start_s: 5, waypoints: [[60.1712, 24.9250], [60.1712, 24.9550]]}
+  - {id: d2, speed_mps: 15, start_s: 5, waypoints: [[60.1712, 25.0152], [60.1712, 25.0452]]}

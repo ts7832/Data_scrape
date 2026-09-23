@@ -1,0 +1,19 @@
+name: helsinki_pass
+seed: 42
+duration_s: 200
+nodes:
+  - {id: n01, lat: 60.1672, lon: 24.9168}
+  - {id: n02, lat: 60.1672, lon: 24.9276}
+  - {id: n03, lat: 60.1672, lon: 24.9384}
+  - {id: n04, lat: 60.1672, lon: 24.9492}
+  - {id: n05, lat: 60.1672, lon: 24.9600}
+  - {id: n06, lat: 60.1726, lon: 24.9168}
+  - {id: n07, lat: 60.1726, lon: 24.9276}
+  - {id: n08, lat: 60.1726, lon: 24.9384}
+  - {id: n09, lat: 60.1726, lon: 24.9492}
+  - {id: n10, lat: 60.1726, lon: 24.9600}
+drones:
+  - id: d1
+    speed_mps: 20
+    start_s: 5
+    waypoints: [[60.1699, 24.9060], [60.1699, 24.9708]]

@@ -1,0 +1,662 @@
+{
+  "$defs": {
+    "Acoustic": {
+      "additionalProperties": false,
+      "properties": {
+        "peak_freq_hz": {
+          "minimum": 0,
+          "title": "Peak Freq Hz",
+          "type": "number"
+        },
+        "snr_db": {
+          "title": "Snr Db",
+          "type": "number"
+        }
+      },
+      "required": [
+        "snr_db",
+        "peak_freq_hz"
+      ],
+      "title": "Acoustic",
+      "type": "object"
+    },
+    "Detection": {
+      "additionalProperties": false,
+      "properties": {
+        "bearing_deg": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 360,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bearing Deg"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "label": {
+          "$ref": "#/$defs/Label"
+        }
+      },
+      "required": [
+        "label",
+        "confidence"
+      ],
+      "title": "Detection",
+      "type": "object"
+    },
+    "EventRef": {
+      "additionalProperties": false,
+      "properties": {
+        "detection_id": {
+          "format": "uuid",
+          "title": "Detection Id",
+          "type": "string"
+        },
+        "phase": {
+          "$ref": "#/$defs/Phase"
+        }
+      },
+      "required": [
+        "detection_id",
+        "phase"
+      ],
+      "title": "EventRef",
+      "type": "object"
+    },
+    "GeoPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "lat": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Lat",
+          "type": "number"
+        },
+        "lon": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Lon",
+          "type": "number"
+        }
+      },
+      "required": [
+        "lat",
+        "lon"
+      ],
+      "title": "GeoPoint",
+      "type": "object"
+    },
+    "Heartbeat": {
+      "additionalProperties": false,
+      "description": "A node saying it is alive, so silence can be told apart from failure.",
+      "properties": {
+        "cpu_temp_c": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cpu Temp C"
+        },
+        "mic_ok": {
+          "title": "Mic Ok",
+          "type": "boolean"
+        },
+        "node_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Node Id",
+          "type": "string"
+        },
+        "queue_depth": {
+          "minimum": 0,
+          "title": "Queue Depth",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sent_at": {
+          "format": "date-time",
+          "title": "Sent At",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "software_version": {
+          "title": "Software Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_id",
+        "sent_at",
+        "software_version",
+        "mic_ok",
+        "queue_depth"
+      ],
+      "title": "Heartbeat",
+      "type": "object"
+    },
+    "IngestResult": {
+      "additionalProperties": false,
+      "properties": {
+        "late": {
+          "default": false,
+          "title": "Late",
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "duplicate"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "IngestResult",
+      "type": "object"
+    },
+    "Label": {
+      "enum": [
+        "drone_multirotor",
+        "drone_fixedwing_engine",
+        "aircraft",
+        "bird",
+        "unknown"
+      ],
+      "title": "Label",
+      "type": "string"
+    },
+    "LiveEvent": {
+      "additionalProperties": false,
+      "description": "One message on the /v1/live WebSocket. `resync` tells the client to reload its snapshot.",
+      "properties": {
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Observation"
+            },
+            {
+              "$ref": "#/$defs/Track"
+            },
+            {
+              "$ref": "#/$defs/NodeView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data"
+        },
+        "type": {
+          "enum": [
+            "observation",
+            "track",
+            "node_status",
+            "resync"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "LiveEvent",
+      "type": "object"
+    },
+    "NodeRegistration": {
+      "additionalProperties": false,
+      "properties": {
+        "location": {
+          "$ref": "#/$defs/SensorLocation"
+        },
+        "node_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Node Id",
+          "type": "string"
+        },
+        "public_key": {
+          "minLength": 1,
+          "title": "Public Key",
+          "type": "string"
+        },
+        "time_quality": {
+          "$ref": "#/$defs/TimeQuality"
+        }
+      },
+      "required": [
+        "node_id",
+        "public_key",
+        "location",
+        "time_quality"
+      ],
+      "title": "NodeRegistration",
+      "type": "object"
+    },
+    "NodeStatus": {
+      "enum": [
+        "online",
+        "stale",
+        "offline"
+      ],
+      "title": "NodeStatus",
+      "type": "string"
+    },
+    "NodeView": {
+      "additionalProperties": false,
+      "properties": {
+        "last_heartbeat_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Heartbeat At"
+        },
+        "location": {
+          "$ref": "#/$defs/SensorLocation"
+        },
+        "mic_ok": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mic Ok"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "string"
+        },
+        "software_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Software Version"
+        },
+        "status": {
+          "$ref": "#/$defs/NodeStatus"
+        },
+        "time_quality": {
+          "$ref": "#/$defs/TimeQuality"
+        },
+        "uncorroborated_rate_24h": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uncorroborated Rate 24H"
+        }
+      },
+      "required": [
+        "node_id",
+        "location",
+        "time_quality",
+        "status"
+      ],
+      "title": "NodeView",
+      "type": "object"
+    },
+    "Observation": {
+      "additionalProperties": false,
+      "description": "A source noticed something. Used by every source type.",
+      "properties": {
+        "acoustic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Acoustic"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "detection": {
+          "$ref": "#/$defs/Detection"
+        },
+        "event": {
+          "$ref": "#/$defs/EventRef"
+        },
+        "observation_id": {
+          "format": "uuid",
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sensor_location": {
+          "$ref": "#/$defs/SensorLocation"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "time_quality": {
+          "$ref": "#/$defs/TimeQuality"
+        }
+      },
+      "required": [
+        "source",
+        "observed_at",
+        "time_quality",
+        "sensor_location",
+        "detection",
+        "event"
+      ],
+      "title": "Observation",
+      "type": "object"
+    },
+    "Phase": {
+      "enum": [
+        "start",
+        "update",
+        "end"
+      ],
+      "title": "Phase",
+      "type": "string"
+    },
+    "SensorLocation": {
+      "additionalProperties": false,
+      "properties": {
+        "accuracy_m": {
+          "minimum": 0,
+          "title": "Accuracy M",
+          "type": "number"
+        },
+        "lat": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Lat",
+          "type": "number"
+        },
+        "lon": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Lon",
+          "type": "number"
+        }
+      },
+      "required": [
+        "lat",
+        "lon",
+        "accuracy_m"
+      ],
+      "title": "SensorLocation",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/SourceType"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "SourceType": {
+      "enum": [
+        "acoustic_node",
+        "simulated_node",
+        "citizen_report",
+        "remote_id",
+        "adsb",
+        "external_network"
+      ],
+      "title": "SourceType",
+      "type": "string"
+    },
+    "TimeQuality": {
+      "enum": [
+        "gps",
+        "ntp",
+        "manual"
+      ],
+      "title": "TimeQuality",
+      "type": "string"
+    },
+    "Track": {
+      "additionalProperties": false,
+      "description": "The server's belief that a drone is at a place, with its evidence.",
+      "properties": {
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "first_seen": {
+          "format": "date-time",
+          "title": "First Seen",
+          "type": "string"
+        },
+        "label": {
+          "$ref": "#/$defs/Label"
+        },
+        "last_seen": {
+          "format": "date-time",
+          "title": "Last Seen",
+          "type": "string"
+        },
+        "observation_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Observation Ids",
+          "type": "array"
+        },
+        "position": {
+          "$ref": "#/$defs/GeoPoint"
+        },
+        "silent_neighbour_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Silent Neighbour Ids",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/TrackStatus"
+        },
+        "track_id": {
+          "format": "uuid",
+          "title": "Track Id",
+          "type": "string"
+        },
+        "uncertainty_m": {
+          "minimum": 0,
+          "title": "Uncertainty M",
+          "type": "number"
+        },
+        "velocity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Velocity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "track_id",
+        "status",
+        "label",
+        "confidence",
+        "position",
+        "uncertainty_m",
+        "first_seen",
+        "last_seen",
+        "observation_ids",
+        "silent_neighbour_ids"
+      ],
+      "title": "Track",
+      "type": "object"
+    },
+    "TrackDetail": {
+      "additionalProperties": false,
+      "properties": {
+        "observations": {
+          "items": {
+            "$ref": "#/$defs/Observation"
+          },
+          "title": "Observations",
+          "type": "array"
+        },
+        "silent_neighbours": {
+          "items": {
+            "$ref": "#/$defs/NodeView"
+          },
+          "title": "Silent Neighbours",
+          "type": "array"
+        },
+        "track": {
+          "$ref": "#/$defs/Track"
+        }
+      },
+      "required": [
+        "track",
+        "observations",
+        "silent_neighbours"
+      ],
+      "title": "TrackDetail",
+      "type": "object"
+    },
+    "TrackStatus": {
+      "enum": [
+        "tentative",
+        "confirmed",
+        "downgraded",
+        "closed"
+      ],
+      "title": "TrackStatus",
+      "type": "string"
+    },
+    "Velocity": {
+      "additionalProperties": false,
+      "properties": {
+        "heading_deg": {
+          "exclusiveMaximum": 360,
+          "minimum": 0,
+          "title": "Heading Deg",
+          "type": "number"
+        },
+        "speed_mps": {
+          "minimum": 0,
+          "title": "Speed Mps",
+          "type": "number"
+        }
+      },
+      "required": [
+        "speed_mps",
+        "heading_deg"
+      ],
+      "title": "Velocity",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "Heartbeat": {
+      "$ref": "#/$defs/Heartbeat"
+    },
+    "IngestResult": {
+      "$ref": "#/$defs/IngestResult"
+    },
+    "LiveEvent": {
+      "$ref": "#/$defs/LiveEvent"
+    },
+    "NodeRegistration": {
+      "$ref": "#/$defs/NodeRegistration"
+    },
+    "NodeView": {
+      "$ref": "#/$defs/NodeView"
+    },
+    "Observation": {
+      "$ref": "#/$defs/Observation"
+    },
+    "Track": {
+      "$ref": "#/$defs/Track"
+    },
+    "TrackDetail": {
+      "$ref": "#/$defs/TrackDetail"
+    }
+  },
+  "title": "KuuloSchema",
+  "type": "object"
+}

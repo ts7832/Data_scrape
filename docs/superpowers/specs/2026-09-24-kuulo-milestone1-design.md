@@ -240,8 +240,12 @@ engine drops in without changes to the public code.
    - `confirmed`: ≥2 distinct nodes within the window.
    - `downgraded`: one node detecting while ≥1 **online** neighbour within
      `expected_hearing_m` (default 500) reports nothing. Confidence is multiplied
-     by 0.5 per silent neighbour, and such a track cannot be confirmed by that
-     node alone.
+     by `silent_penalty` (default 0.7) per silent neighbour, and such a track
+     cannot be confirmed by that node alone. A downgraded track stays visible
+     and is promoted to `confirmed` as soon as a second node detects it.
+     All thresholds are configurable, because urban acoustic shadowing
+     (buildings, wind) means a silent neighbour is weaker evidence than
+     free-field physics suggests.
 5. When a track becomes `confirmed`, trace requests are created for all
    contributing detections.
 
@@ -287,7 +291,9 @@ centred on Helsinki.
 - **Bundled scenarios:**
   - `single_node`
   - `helsinki_pass` (10 nodes, 1 drone)
-  - `false_alarm` (truck near one node)
+  - `false_alarm` (a leaf blower or two-stroke scooter near one node that fools
+    the classifier: that node emits high-confidence `drone_*` observations; fusion
+    must not confirm it)
   - `two_drones` (5 km apart)
   - `node_failure`
   - `long_event` (10-minute loiter: exercises multi-segment traces)
@@ -301,10 +307,22 @@ centred on Helsinki.
   - **Each licence is verified before use and recorded in `ml/DATASETS.md`,
     including whether commercial use is permitted.**
 - **No YouTube or other scraped audio.**
+- **Hard negatives:** drone-like sounds (leaf blowers, two-stroke scooters and
+  mopeds, chainsaws, lawnmowers, small aircraft) are collected from the licensed
+  datasets wherever available and reported as a separate evaluation class.
+- **Data augmentation (training set only):** to stop the model overfitting to
+  close-range, high-SNR recordings, positive samples are degraded on the fly:
+  - distance simulation: gain reduction plus a high-frequency roll-off
+    (atmospheric absorption)
+  - background mixing at random SNR (−5 to +20 dB) using the negative/background set
+  - room/urban reverb (synthetic impulse responses)
+  - time-varying pitch shift (±3 %) approximating a Doppler pass
+  - random gain and time shift
 - Splits are by recording/source, not by window, to avoid leakage.
 - `ml/train.py`: YAMNet embeddings → head → ONNX export.
 - `ml/evaluate.py`: precision/recall/F1 and a confusion matrix for Step A and
-  Step B on the same held-out set; results go into the README.
+  Step B on the same held-out set (clean, not augmented), plus a false-positive
+  rate per hard-negative sound type; results go into the README.
 
 ## 11. Error handling
 
@@ -369,7 +387,9 @@ centred on Helsinki.
    - demo GIF
    - architecture
    - quick start
-   - known limitations (localhost-only, coarse location, dataset licences, swarm separation)
+   - known limitations (localhost-only, coarse location, dataset licences, swarm
+     separation, silent-neighbour logic ignores urban acoustic shadowing, limited
+     real-world distant-drone training data)
    - open-core note
    - AGPL-3.0 licence
 

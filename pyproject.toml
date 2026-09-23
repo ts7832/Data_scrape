@@ -21,6 +21,11 @@ dev = ["pytest>=8", "ruff>=0.6", "httpx>=0.27"]
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib -q"
 testpaths = ["protocol/tests", "server/tests"]
+# Defense-in-depth: workspace packages are also installed editable via uv, but that
+# install has been observed to intermittently drop a member from sys.path in this
+# environment (see docs/superpowers/plans/PROGRESS.md). Belt-and-suspenders so test
+# collection never depends solely on that install being in a good state.
+pythonpath = ["protocol/src", "server/src"]
 
 [tool.ruff]
 line-length = 100

@@ -1,0 +1,29 @@
+# Local Claude Code settings (personal, not shared)
+.claude/settings.local.json
+
+# Tool caches kept inside the project
+.cache/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+
+# Data, models, local state: never committed (download scripts only)
+data/
+*.wav
+*.flac
+*.mp3
+*.onnx
+*.db
+*.sqlite
+.kuulo/
+
+# OS
+.DS_Store

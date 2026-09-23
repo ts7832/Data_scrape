@@ -2825,7 +2825,7 @@ Then set `dashboard/package.json` fields (keep the dependency versions npm wrote
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
-    "gen:types": "cd .. && uv run python -m kuulo_protocol.schema > dashboard/src/api/schema.json && cd dashboard && json2ts -i src/api/schema.json -o src/api/types.ts --bannerComment \"// Generated from kuulo_protocol by npm run gen:types. Do not edit.\""
+    "gen:types": "cd .. && uv run python -m kuulo_protocol.schema > dashboard/src/api/schema.json && cd dashboard && npx json2ts -i src/api/schema.json -o src/api/types.ts"
   }
 }
 ```

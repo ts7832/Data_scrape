@@ -1,0 +1,18 @@
+[project]
+name = "kuulo-sim"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["kuulo-protocol", "httpx>=0.27", "pyyaml>=6"]
+
+[project.scripts]
+kuulo-sim = "kuulo_sim.cli:main"
+
+[tool.uv.sources]
+kuulo-protocol = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kuulo_sim"]

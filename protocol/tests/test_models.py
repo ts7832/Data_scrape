@@ -2,6 +2,8 @@ from datetime import UTC, datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
+
 from kuulo_protocol.models import (
     DRONE_LABELS,
     Label,
@@ -10,7 +12,6 @@ from kuulo_protocol.models import (
     to_utc_ms,
 )
 from kuulo_protocol.testing import make_heartbeat, make_observation
-from pydantic import ValidationError
 
 T0 = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
 

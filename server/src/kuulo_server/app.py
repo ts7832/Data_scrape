@@ -18,10 +18,12 @@ from kuulo_protocol.models import Heartbeat, NodeRegistration, Observation, Trac
 
 from .config import Settings
 from .db import NodeRow, make_session_factory
+from .fusion.context import DbFusionContext
+from .fusion.loader import load_engine
 from .ingest import IngestError, ingest_heartbeat, ingest_observation, register_node
 from .live import LiveHub
 from .status import node_view
-from .tracks import open_tracks, track_detail
+from .tracks import close_open_tracks, open_tracks, persist_track, track_detail, uncorroborated_rate
 
 log = logging.getLogger("kuulo.server")
 
@@ -32,14 +34,39 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     hub = LiveHub()
     last_status: dict[str, NodeStatus] = {}
 
+    engine = load_engine(settings.fusion_engine)
+    with sessions() as session:
+        closed = close_open_tracks(session)
+    if closed:
+        log.info("closed %d tracks left open by a previous run", closed)
+
+    def apply_updates(updates) -> None:
+        with sessions() as session:
+            for update in updates:
+                persist_track(session, update.track)
+        for update in updates:
+            hub.publish(LiveEvent(type="track", data=update.track))
+            if settings.on_track_update:
+                settings.on_track_update(update.track)
+
+    def run_fusion(call) -> None:
+        try:
+            apply_updates(call(DbFusionContext(sessions, settings.clock())))
+        except Exception:
+            log.exception("fusion engine failed; ingest continues")
+
+    def view_of(session, row, now) -> NodeView:
+        return node_view(row, now, uncorroborated_rate(session, row.node_id, now))
+
     def run_tick() -> None:
         now = settings.clock()
         with sessions() as session:
             for row in session.scalars(select(NodeRow)):
-                view = node_view(row, now)
+                view = view_of(session, row, now)
                 if last_status.get(row.node_id) not in (None, view.status):
                     hub.publish(LiveEvent(type="node_status", data=view))
                 last_status[row.node_id] = view.status
+        run_fusion(lambda ctx: engine.on_tick(now, ctx))
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -65,6 +92,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.sessions = sessions
     app.state.hub = hub
     app.state.run_tick = run_tick
+    app.state.engine = engine
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_request: Request, exc: RequestValidationError):
@@ -86,6 +114,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             result = ingest_observation(session, obs, settings.clock(), settings)
         if result.status == "accepted" and not result.late:
             hub.publish(LiveEvent(type="observation", data=obs))
+            run_fusion(lambda ctx: engine.on_observation(obs, ctx))
         return result
 
     @app.post("/v1/heartbeats")
@@ -93,7 +122,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         now = settings.clock()
         with sessions() as session:
             row = ingest_heartbeat(session, hb, now, settings)
-            view = node_view(row, now)
+            view = view_of(session, row, now)
         hub.publish(LiveEvent(type="node_status", data=view))
         return {"status": "ok"}
 
@@ -101,7 +130,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def get_nodes() -> list[NodeView]:
         now = settings.clock()
         with sessions() as session:
-            return [node_view(row, now) for row in session.scalars(select(NodeRow))]
+            return [view_of(session, row, now) for row in session.scalars(select(NodeRow))]
 
     @app.get("/v1/tracks")
     async def get_tracks() -> list[Track]:

@@ -1,0 +1,30 @@
+# Kuulo node demo config. `make node` copies this to node/config.local.toml (gitignored);
+# edit the local copy, not this file. Relative paths are relative to this file.
+
+node_id = "demo-laptop"
+server_url = "http://127.0.0.1:8000"
+time_quality = "ntp"
+key_file = "demo-laptop.key"
+model_path = "../data/models/yamnet.tflite"
+class_map_path = "../data/models/yamnet_class_map.csv"
+
+# Reported sensor position. Demo value: University of Helsinki main building,
+# city centre campus. Never commit a real node location.
+[location]
+lat = 60.1694
+lon = 24.9490
+accuracy_m = 50
+
+[detection]
+threshold = 0.5
+k = 3
+n = 5
+end_after_s = 5.0
+update_every_s = 5.0
+
+# drone score = max over classes of (weight x YAMNet score). Keys are AudioSet class names.
+[weights]
+"Propeller, airscrew" = 1.0
+"Helicopter" = 0.8
+"Aircraft" = 0.6
+"Aircraft engine" = 0.6

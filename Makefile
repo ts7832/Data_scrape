@@ -43,9 +43,16 @@ model:
 node: $(NODE_CONFIG)
 	uv run --no-sync kuulo-node run --config $(NODE_CONFIG) $(if $(INPUT),--input $(INPUT)) $(if $(SPEED),--speed $(SPEED)) $(if $(SCORES),--print-scores)
 
+# Publishing shares the whole git history, not just the current tree, so this checks both:
+# a forbidden file committed and later deleted would pass a tree-only check. The coordinate
+# scan below stays informational, not a hard failure -- read it yourself before publishing.
 prepublish:
 	@! git ls-files | grep -E '\.(wav|flac|mp3|tflite|onnx|db|key)$$|(^|/)data/|\.local\.toml$$' \
 		|| (echo "FAIL: forbidden files are tracked (see above)"; exit 1)
-	@echo "Tracked coordinates (must all be simulated or the demo location 60.1694, 24.9490):"
+	@! git log --all --name-only --pretty=format: | sort -u \
+		| grep -E '\.(wav|flac|mp3|tflite|onnx|db|key)$$|(^|/)data/|\.local\.toml$$' \
+		|| (echo "FAIL: forbidden files exist somewhere in git history (see above)"; exit 1)
+	@echo "Tracked coordinates -- read this yourself, it is not an automated check. Every"
+	@echo "entry must be simulated, a test fixture, or the demo location 60.1694, 24.9490:"
 	@git grep -nE 'lat[" =:]+[0-9]{2}\.[0-9]{3}' -- ':!docs' | cut -c1-120
-	@echo "OK: no audio, models, keys, databases or local configs are tracked."
+	@echo "OK: no audio, models, keys, databases or local configs are tracked, now or in history."

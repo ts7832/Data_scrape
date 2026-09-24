@@ -95,14 +95,20 @@ trained head (Step B) is the planned fix.
 Raw audio exists only in the node's memory and is never written to disk or uploaded. The node
 reports only its configured location — the demo config points at the University of Helsinki
 main building, not a real deployment. No model weights, audio, or private keys are committed
-to this repository; `make prepublish` checks that before every publish.
+to this repository, in the current tree or anywhere in its history; `make prepublish` checks
+both before every publish.
 
 ## Development
 
 ```bash
 make test        # ruff, pytest, vitest
-make prepublish  # verifies no audio, models, keys, databases or local configs are tracked
+make prepublish  # fails if audio, models, keys, databases or local configs are tracked
+                  # (current tree and full git history); also prints every tracked
+                  # coordinate for you to read -- that part is not an automated check
 ```
+
+Before making this repository public, in order: record the demo GIF, run `make prepublish`
+and read its coordinate list yourself, push, then change the repository's visibility.
 
 Repository layout: `protocol/` (shared message types and signing), `server/` (ingest, storage,
 fusion), `sim/` (multi-node scenario player), `node/` (microphone/wav listener), `dashboard/`

@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
-import { Map as MapLibreMap, type GeoJSONSource, type MapLayerMouseEvent, setWorkerUrl } from "maplibre-gl";
+import { Map as MapLibreMap, Marker, type GeoJSONSource, type MapLayerMouseEvent, setWorkerUrl } from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Action, State } from "../state/reducer";
 import { nodesToGeoJSON, pulsesToGeoJSON, trailsToGeoJSON, tracksToGeoJSON, uncertaintyToGeoJSON } from "../map/layers";
+import { shortTrackId } from "../format";
 import { PALETTE } from "../theme";
 
 // MapLibre GL v6 is ESM-only and locates its tile worker via
@@ -32,6 +33,9 @@ export function MapView({ state, dispatch }: { state: State; dispatch: (a: Actio
   // are now typed to a closed set of known event names, so an app-defined event name
   // doesn't type-check there.
   const onReady = useRef<(() => void)[]>([]);
+  // Track callsigns are HTML markers, not a symbol layer: the tile server only
+  // serves Noto Sans glyphs, and the UI is monospace throughout.
+  const labels = useRef(new Map<string, Marker>());
 
   useEffect(() => {
     if (!container.current) return;
@@ -64,10 +68,6 @@ export function MapView({ state, dispatch }: { state: State; dispatch: (a: Actio
       map.addLayer({ id: "tracks", type: "circle", source: "tracks",
         paint: { "circle-radius": 7, "circle-color": TRACK_COLORS as never,
           "circle-stroke-width": 2, "circle-stroke-color": PALETTE.bg } });
-      map.addLayer({ id: "track-labels", type: "symbol", source: "tracks",
-        layout: { "text-field": ["get", "callsign"], "text-font": ["Noto Sans Regular"],
-          "text-size": 11, "text-offset": [0, 1.6], "text-letter-spacing": 0.1 },
-        paint: { "text-color": PALETTE.text, "text-halo-color": PALETTE.bg, "text-halo-width": 1.5 } });
       map.on("click", "tracks", (e: MapLayerMouseEvent) => {
         const id = e.features?.[0]?.properties?.id;
         if (typeof id === "string") dispatch({ type: "select", trackId: id });
@@ -83,6 +83,8 @@ export function MapView({ state, dispatch }: { state: State; dispatch: (a: Actio
       // map must not inherit "loaded" or callbacks bound to the removed one.
       loaded.current = false;
       onReady.current = [];
+      for (const m of labels.current.values()) m.remove();
+      labels.current.clear();
       mapRef.current = null;
       map.remove();
     };
@@ -99,10 +101,39 @@ export function MapView({ state, dispatch }: { state: State; dispatch: (a: Actio
       set("trails", trailsToGeoJSON(state.trails, state.tracks));
       set("pulses", pulsesToGeoJSON(state.pulses, state.nodes));
       map.setFilter("track-selected", ["==", ["get", "id"], state.selectedTrackId ?? NO_TRACK]);
+      syncLabels(map);
+    };
+    const syncLabels = (map: MapLibreMap) => {
+      const markers = labels.current;
+      for (const [id, marker] of markers) {
+        if (!(id in state.tracks)) { marker.remove(); markers.delete(id); }
+      }
+      for (const t of Object.values(state.tracks)) {
+        let marker = markers.get(t.track_id);
+        if (!marker) {
+          const el = document.createElement("div");
+          el.textContent = shortTrackId(t.track_id);
+          el.addEventListener("click", (e) => {
+            e.stopPropagation();
+            dispatch({ type: "select", trackId: t.track_id });
+          });
+          // setLngLat before addTo: MapLibre positions the marker on add and
+          // throws if it has no coordinates yet.
+          marker = new Marker({ element: el, anchor: "top", offset: [0, 12] })
+            .setLngLat([t.position.lon, t.position.lat]).addTo(map);
+          markers.set(t.track_id, marker);
+        } else {
+          marker.setLngLat([t.position.lon, t.position.lat]);
+        }
+        const cl = marker.getElement().classList;
+        cl.add("track-label");
+        for (const s of ["confirmed", "tentative", "downgraded"]) cl.toggle(s, t.status === s);
+        cl.toggle("selected", t.track_id === state.selectedTrackId);
+      }
     };
     if (loaded.current) update();
     else onReady.current.push(update);
-  }, [state]);
+  }, [state, dispatch]);
 
   return <div ref={container} className="map" />;
 }

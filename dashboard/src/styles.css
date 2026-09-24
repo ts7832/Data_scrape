@@ -1,10 +1,14 @@
 /* Kuulo ops console, built on Blueprint's dark theme (bp6-dark on <body>).
-   Colours are Blueprint palette values; see src/theme.ts for the map's copy. */
+   Colours are Blueprint palette values; see src/theme.ts for the map's copy.
+   One typeface everywhere: the monospace stack below. Blueprint sets its sans
+   stack on <body> only, so overriding it there (plus form controls, which don't
+   inherit by default) covers every component. */
 :root {
   --bg: #1C2127;        /* dark-gray1: map area, deepest surface */
   --panel: #252A31;     /* dark-gray2: panels */
-  --panel-hi: #2F343C;  /* dark-gray3: hover / selected rows */
+  --panel-hi: #2F343C;  /* dark-gray3: header strips, selected rows */
   --line: #111418;      /* black: panel separators */
+  --rule: rgba(255, 255, 255, 0.08); /* hairlines inside panels */
   --text: #F6F7F9;
   --muted: #8F99A8;
   --primary: #4C90F0;
@@ -13,15 +17,23 @@
   --danger: #E76A6E;
   --node: #68C1EE;
   --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --row: 20px;
 }
 
 html, body, #root { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+body {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+button, input, select, textarea { font-family: inherit; }
 
 .layout {
   display: grid;
   height: 100vh;
-  grid-template-columns: 272px minmax(0, 1fr) 340px;
-  grid-template-rows: 50px minmax(0, 1fr) 170px;
+  grid-template-columns: 300px minmax(0, 1fr) 320px;
+  grid-template-rows: 36px minmax(0, 1fr) 160px;
   grid-template-areas:
     "top  top  top"
     "left map  right"
@@ -30,97 +42,159 @@ html, body, #root { margin: 0; height: 100%; background: var(--bg); color: var(-
   background: var(--line); /* the 1px gaps become crisp panel borders */
 }
 
-.topbar { grid-area: top; box-shadow: none; }
 .panel.left { grid-area: left; }
 .map-area { grid-area: map; position: relative; background: var(--bg); min-height: 0; }
 .panel.right { grid-area: right; }
-.eventlog { grid-area: log; }
-
+.panel.log { grid-area: log; }
 .map { position: absolute; inset: 0; }
 
-/* Panels */
-.panel, .eventlog {
+/* Panels: a column of full-width Blueprint Sections, no inner padding, so every
+   section and table shares the same left/right edges top to bottom. */
+.panel {
   background: var(--panel);
   overflow-y: auto;
-  padding: 10px 12px;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
-.panel section + section { margin-top: 18px; }
 
-h2.caps {
+.muted { color: var(--muted); }
+.caps { text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* Blueprint Section, flattened into a dense strip header */
+.panel .bp6-section {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  flex: none;
+  overflow: visible; /* Blueprint's overflow:hidden would break the sticky headers */
+}
+.panel .bp6-section + .bp6-section { border-top: 1px solid var(--line); }
+.panel .bp6-section.bp6-compact .bp6-section-header {
+  min-height: 26px;
+  padding: 0 8px;
+  gap: 8px;
+  background: var(--panel-hi);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.panel .bp6-section.bp6-compact .bp6-section-header-left { padding: 0; gap: 6px; }
+.panel .bp6-section-header-title {
   font-size: 11px;
   font-weight: 600;
-  margin: 0 0 8px;
-  display: flex;
-  justify-content: space-between;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  line-height: 16px;
 }
-.caps { text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; }
-.mono { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
-.muted { color: var(--muted); }
-.small { font-size: 12px; }
-.grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.gap-left { margin-left: 6px; }
+.panel .bp6-section-card { padding: 0; }
+.panel .bp6-section-card:not(:last-child) { border-bottom: 1px solid var(--line); }
+.panel .bp6-section-card.pad { padding: 6px 8px; }
 
-/* Top bar */
-.brand { font-weight: 700; letter-spacing: 0.18em; display: flex; align-items: center; gap: 8px; }
-
-/* Lists */
-.panel ul, .eventlog ol { list-style: none; margin: 0; padding: 0; }
-.row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
-  border-left: 2px solid transparent;
+/* Tags: square, small, uppercase */
+.bp6-tag {
+  border-radius: 2px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  min-height: 16px;
+  line-height: 16px;
+  padding: 0 5px;
 }
-.row.clickable { cursor: pointer; }
-.row.clickable:hover { background: var(--panel-hi); }
-.row.selected { background: var(--panel-hi); border-left-color: var(--primary); }
 
-.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-.dot-online { background: var(--node); box-shadow: 0 0 6px var(--node); }
-.dot-stale { background: var(--warning); }
-.dot-offline { background: var(--muted); opacity: 0.6; }
+/* Blueprint HTMLTable, tightened. Fixed layout + <colgroup> widths keep columns
+   identical between the tables stacked in a panel. */
+table.bp6-html-table {
+  width: 100%;
+  table-layout: fixed;
+  font-size: 11px;
+}
+table.bp6-html-table.bp6-compact th,
+table.bp6-html-table.bp6-compact td {
+  padding: 0 8px;
+  height: var(--row);
+  line-height: var(--row);
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+table.bp6-html-table th {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  position: sticky;
+  top: 26px; /* below the sticky section header */
+  z-index: 1;
+  background: var(--panel);
+  box-shadow: inset 0 -1px 0 var(--rule);
+}
+table.bp6-html-table td { color: var(--text); }
+table.bp6-html-table tbody tr td { box-shadow: inset 0 1px 0 var(--rule); }
+table.bp6-html-table tbody tr:first-child td { box-shadow: none; }
+table.bp6-html-table.bp6-html-table-striped tbody tr:nth-child(odd) td { background: rgba(143, 153, 168, 0.06); }
+table.bp6-html-table tr.selected td { background: rgba(76, 144, 240, 0.18) !important; }
+table.bp6-html-table tr.selected td:first-child { box-shadow: inset 2px 0 0 var(--primary); }
+table.bp6-html-table td.num, table.bp6-html-table th.num { text-align: right; }
+table.bp6-html-table tr.empty td { color: var(--muted); letter-spacing: 0.1em; }
+.cell-tag { margin-left: 6px; }
 
-/* Track detail */
-.detail-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 10px;
-  margin-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-}
-.callsign { font-size: 20px; font-weight: 600; letter-spacing: 0.06em; }
-.fields {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 6px 14px;
-  margin: 0 0 18px;
-  align-items: baseline;
-}
-.fields dd { margin: 0; text-align: right; }
+/* Key/value table in the track detail */
+table.kv td:first-child { color: var(--muted); font-size: 10px; letter-spacing: 0.1em; }
+table.kv tbody tr td { box-shadow: none; }
+.kv-bar { display: flex; align-items: center; gap: 8px; }
+.kv-bar .bp6-progress-bar { flex: 1; height: 6px; border-radius: 0; }
+.kv-bar .bp6-progress-bar .bp6-progress-meter { border-radius: 0; }
+
 .tags { display: flex; flex-wrap: wrap; gap: 4px; }
 
-/* Event log */
-.eventlog li {
-  display: grid;
-  grid-template-columns: 72px 70px 1fr;
-  gap: 10px;
-  padding: 2px 0;
-  line-height: 1.5;
+/* Top bar */
+.bp6-navbar.topbar {
+  grid-area: top;
+  height: 36px;
+  padding: 0 10px;
+  box-shadow: none;
+  background: var(--panel);
 }
-.eventlog .source { color: var(--text); }
-.tone-none { color: var(--muted); }
-.tone-primary { color: var(--primary); }
-.tone-success { color: var(--success); }
-.tone-warning { color: var(--warning); }
-.tone-danger { color: var(--danger); font-weight: 600; }
+.topbar .bp6-navbar-group { height: 36px; gap: 8px; }
+.topbar .bp6-navbar-divider { height: 16px; margin: 0 4px; }
+.topbar .bp6-navbar-heading { margin-right: 4px; font-size: 12px; }
+.brand { font-weight: 700; letter-spacing: 0.24em; display: flex; align-items: center; gap: 8px; }
+.stat { letter-spacing: 0.08em; }
+.stat b { color: var(--text); font-weight: 600; margin-left: 6px; }
+
+/* Event log tones */
+.tone-none { color: var(--muted) !important; }
+.tone-primary { color: var(--primary) !important; }
+.tone-success { color: var(--success) !important; }
+.tone-warning { color: var(--warning) !important; }
+.tone-danger { color: var(--danger) !important; font-weight: 600; }
+
+/* Track callsigns on the map: HTML markers so they use the mono face
+   (the tile server only serves Noto Sans glyphs). */
+.track-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text);
+  background: rgba(28, 33, 39, 0.85);
+  border-left: 2px solid var(--muted);
+  padding: 1px 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.track-label.confirmed { border-left-color: var(--danger); }
+.track-label.tentative { border-left-color: var(--warning); }
+.track-label.selected { background: var(--text); color: var(--bg); }
 
 /* Dark MapLibre attribution to match */
 .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib.maplibregl-compact {
   background: rgba(28, 33, 39, 0.8) !important;
   color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
 }
 .maplibregl-ctrl-attrib a { color: var(--muted) !important; }
 
@@ -129,7 +203,7 @@ h2.caps {
   .layout {
     height: auto;
     grid-template-columns: 1fr;
-    grid-template-rows: 50px 55vh auto auto 200px;
+    grid-template-rows: 36px 55vh auto auto 200px;
     grid-template-areas: "top" "map" "right" "left" "log";
   }
 }

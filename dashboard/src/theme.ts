@@ -1,3 +1,5 @@
+import { Intent } from "@blueprintjs/core";
+
 // Blueprint's dark-theme palette, for places CSS can't reach (map paint properties).
 export const PALETTE = {
   bg: "#1C2127",       // dark-gray1
@@ -9,3 +11,11 @@ export const PALETTE = {
   danger: "#E76A6E",   // red4
   success: "#72CA9B",  // green4
 } as const;
+
+// Status → Blueprint intent, shared by every table and tag that shows a status.
+export const TRACK_INTENT: Record<string, Intent> = {
+  confirmed: Intent.DANGER, tentative: Intent.WARNING, downgraded: Intent.NONE, closed: Intent.NONE,
+};
+export const NODE_INTENT: Record<string, Intent> = {
+  online: Intent.SUCCESS, stale: Intent.WARNING, offline: Intent.NONE,
+};

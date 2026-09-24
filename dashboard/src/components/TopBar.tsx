@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alignment, Icon, Intent, Navbar, NavbarDivider, NavbarGroup, NavbarHeading, Tag } from "@blueprintjs/core";
-import { clockUtc } from "../format";
+import { clockZ } from "../format";
 import type { Connection, State } from "../state/reducer";
 
 const CONNECTION_INTENT: Record<Connection, Intent> = {
@@ -13,7 +13,11 @@ function UtcClock() {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
-  return <span className="mono">UTC {clockUtc(now)}</span>;
+  return <span>{clockZ(now)}</span>;
+}
+
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+  return <span className="stat muted">{label}<b>{value}</b></span>;
 }
 
 export function TopBar({ state }: { state: State }) {
@@ -26,22 +30,20 @@ export function TopBar({ state }: { state: State }) {
     <Navbar className="topbar">
       <NavbarGroup align={Alignment.START}>
         <NavbarHeading className="brand">
-          <Icon icon="satellite" size={14} /> KUULO
+          <Icon icon="satellite" size={12} /> KUULO
         </NavbarHeading>
         <NavbarDivider />
-        <span className="caps muted">Helsinki sector</span>
+        <Stat label="SECTOR" value="HELSINKI" />
       </NavbarGroup>
       <NavbarGroup align={Alignment.END}>
-        <Tag minimal round intent={CONNECTION_INTENT[state.connection]} icon="dot">
+        <Tag minimal intent={CONNECTION_INTENT[state.connection]} icon={<Icon icon="full-circle" size={8} />}>
           {state.connection.toUpperCase()}
         </Tag>
         <NavbarDivider />
-        <span className="caps muted">Nodes</span>&nbsp;<span className="mono">{online}/{nodes.length}</span>
+        <Stat label="SENSORS" value={`${online}/${nodes.length}`} />
         <NavbarDivider />
-        <span className="caps muted">Tracks</span>&nbsp;<span className="mono">{tracks.length}</span>
-        {confirmed > 0 && (
-          <Tag minimal intent={Intent.DANGER} className="gap-left">{confirmed} CONFIRMED</Tag>
-        )}
+        <Stat label="TRACKS" value={tracks.length} />
+        {confirmed > 0 && <Tag minimal intent={Intent.DANGER}>{confirmed} CONFIRMED</Tag>}
         <NavbarDivider />
         <UtcClock />
       </NavbarGroup>

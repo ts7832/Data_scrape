@@ -51,7 +51,11 @@ describe("reducer", () => {
   it("node_status upserts; observation adds a pulse that expires", () => {
     let s = reducer(initialState, { type: "live", event: { type: "node_status", data: node("n1", "stale") }, receivedAt: 0 });
     expect(s.nodes["n1"].status).toBe("stale");
-    const obs = { source: { type: "simulated_node", id: "n1" } } as never;
+    const obs = {
+      source: { type: "simulated_node", id: "n1" },
+      detection: { label: "drone_multirotor", confidence: 0.9 },
+      event: { detection_id: "d", phase: "start" },
+    } as never;
     s = reducer(s, { type: "live", event: { type: "observation", data: obs }, receivedAt: 1000 });
     expect(s.pulses).toEqual([{ nodeId: "n1", at: 1000 }]);
     s = reducer(s, { type: "expirePulses", now: 1000 + PULSE_MS + 1 });

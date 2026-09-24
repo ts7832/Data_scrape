@@ -1,7 +1,10 @@
 import { useEffect, useReducer } from "react";
 import { fetchSnapshot } from "./api/client";
+import { EventLog } from "./components/EventLog";
 import { MapView } from "./components/MapView";
-import { SidePanel } from "./components/SidePanel";
+import { NodePanel } from "./components/NodePanel";
+import { TopBar } from "./components/TopBar";
+import { TrackDetail } from "./components/TrackDetail";
 import { defaultLiveUrl, startLive, type SocketLike } from "./state/live";
 import { initialState, reducer } from "./state/reducer";
 
@@ -27,8 +30,11 @@ export function App() {
 
   return (
     <div className="layout">
-      <MapView state={state} dispatch={dispatch} />
-      <SidePanel state={state} dispatch={dispatch} />
+      <TopBar state={state} />
+      <NodePanel state={state} dispatch={dispatch} />
+      <main className="map-area"><MapView state={state} dispatch={dispatch} /></main>
+      <TrackDetail state={state} />
+      <EventLog events={state.events} />
     </div>
   );
 }

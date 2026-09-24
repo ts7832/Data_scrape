@@ -1,5 +1,6 @@
 import type { NodeView, Track } from "../api/types";
 import type { Pulse } from "../state/reducer";
+import { shortTrackId } from "../format";
 import { circlePolygon } from "./geo";
 
 type Props = Record<string, string | number>;
@@ -22,7 +23,9 @@ export function tracksToGeoJSON(tracks: Record<string, Track>): Collection<Point
   return {
     type: "FeatureCollection",
     features: Object.values(tracks).map((t) =>
-      point(t.position.lon, t.position.lat, { id: t.track_id, status: t.status, confidence: t.confidence })),
+      point(t.position.lon, t.position.lat, {
+        id: t.track_id, status: t.status, confidence: t.confidence, callsign: shortTrackId(t.track_id),
+      })),
   };
 }
 

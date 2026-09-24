@@ -3,8 +3,8 @@
 Civic acoustic drone detection for Finnish cities: cheap microphones that hear hobby drones,
 and a fusion layer that turns many noisy detections into tracks you can trust.
 
-<!-- record with the node + dashboard running; see "Demo" below -->
-![demo](docs/demo.gif)
+<!-- ![demo](docs/demo.gif) -- add this back once docs/demo.gif is recorded (node + dashboard
+     running together); see the Quick start section below to record it. -->
 
 ## Why
 

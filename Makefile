@@ -1,4 +1,4 @@
-.PHONY: dev server dashboard sim test types
+.PHONY: dev server dashboard sim test types node model prepublish
 
 SCENARIO ?= helsinki_pass
 SPEED ?= 1
@@ -31,3 +31,14 @@ test:
 	uv run --no-sync ruff check .
 	uv run --no-sync pytest
 	cd dashboard && npx vitest run
+
+NODE_CONFIG ?= node/config.local.toml
+
+node/config.local.toml:
+	cp node/config.example.toml $@
+
+model:
+	uv run --no-sync python node/scripts/download_model.py
+
+node: $(NODE_CONFIG)
+	uv run --no-sync kuulo-node run --config $(NODE_CONFIG) $(if $(INPUT),--input $(INPUT)) $(if $(SPEED),--speed $(SPEED)) $(if $(SCORES),--print-scores)

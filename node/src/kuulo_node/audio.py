@@ -141,10 +141,18 @@ def mic_source(
         try:
             stream, rate = _open_stream(sd, block_s, q)
             log.info("microphone open at %d Hz", rate)
+            stream_start = time.monotonic() - t0
+            elapsed = 0.0  # audio-time consumed since this stream opened
             while True:
                 chunk = q.get(timeout=2.0)
+                # Timed by samples, not by time.monotonic() at dequeue: PortAudio's queue
+                # is unbounded, so a slow consumer (e.g. blocked on a synchronous uplink
+                # POST) never drops audio -- but reading the wall clock here would make
+                # its own delay look like a dropped stream to Windower's gap detection.
+                t = stream_start + elapsed
+                elapsed += chunk.size / rate
                 samples = chunk if rate == SAMPLE_RATE else to_mono_16k(chunk, rate)
-                yield AudioBlock(samples, time.monotonic() - t0, restart)
+                yield AudioBlock(samples, t, restart)
                 restart = False
         except (sd.PortAudioError, queue.Empty, OSError) as exc:
             log.error("%s (%s). Retrying in %.0f s.", MIC_HELP, exc, retry_s)

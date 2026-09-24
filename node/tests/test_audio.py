@@ -1,4 +1,8 @@
+import sys
+import time
+
 import numpy as np
+import pytest
 import soundfile as sf
 
 from kuulo_node.audio import (
@@ -8,6 +12,7 @@ from kuulo_node.audio import (
     AudioBlock,
     MicHealth,
     Windower,
+    mic_source,
     to_mono_16k,
     wav_source,
 )
@@ -74,3 +79,43 @@ def test_mic_health_flips_after_10s_of_digital_silence_and_recovers():
     assert flips.count(True) == 1 and not h.ok
     h.update(AudioBlock(np.full(1600, 0.01, np.float32), 11.0))
     assert h.ok
+
+
+class _FakeInputStream:
+    """Delivers 6 fake blocks synchronously in start(), exactly as PortAudio's callback
+    would -- but with no real concurrency, so the test controls exactly what's queued."""
+
+    def __init__(self, *, samplerate, channels, dtype, blocksize, callback):
+        self.blocksize = blocksize
+        self._callback = callback
+
+    def start(self):
+        chunk = np.full((self.blocksize, 1), 0.05, np.float32)
+        for _ in range(6):
+            self._callback(chunk, self.blocksize, None, None)
+
+    def close(self):
+        pass
+
+
+class _FakeSD:
+    class PortAudioError(Exception):
+        pass
+
+    InputStream = _FakeInputStream
+
+    @staticmethod
+    def query_devices(kind=None):
+        return {"default_samplerate": SAMPLE_RATE}
+
+
+def test_mic_source_times_blocks_by_samples_not_by_consumption_delay(monkeypatch):
+    # A slow consumer (e.g. the runner blocked on a synchronous uplink POST) must not
+    # make mic_source's timestamps jump -- that would look like a dropped audio stream
+    # to Windower's gap detection and needlessly split a live detection in two.
+    monkeypatch.setitem(sys.modules, "sounddevice", _FakeSD)
+    gen = mic_source(block_s=0.1)
+    first = next(gen)
+    time.sleep(HOP_S + 0.1)  # well over one hop: simulate the runner being busy
+    second = next(gen)
+    assert second.t - first.t == pytest.approx(0.1, abs=1e-3)

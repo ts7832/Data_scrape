@@ -1,8 +1,17 @@
 import { useEffect, useRef } from "react";
-import { Map as MapLibreMap, type GeoJSONSource, type MapLayerMouseEvent } from "maplibre-gl";
+import { Map as MapLibreMap, type GeoJSONSource, type MapLayerMouseEvent, setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Action, State } from "../state/reducer";
 import { nodesToGeoJSON, pulsesToGeoJSON, trailsToGeoJSON, tracksToGeoJSON, uncertaintyToGeoJSON } from "../map/layers";
+
+// MapLibre GL v6 is ESM-only and locates its tile worker via
+// `new URL("./maplibre-gl-worker.mjs", import.meta.url)` internally, which
+// Vite doesn't resolve to a servable script (dev or prod) — the map then
+// loads its style/tiles but never renders anything ("Worker failed to load").
+// `?worker&url` (not plain `?url`) bundles the worker together with the
+// sibling module it imports, giving it a real, servable URL up front.
+setWorkerUrl(workerUrl);
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 const HELSINKI: [number, number] = [24.9384, 60.1699];

@@ -21,6 +21,7 @@ is committed (section 7).
 ## 2. Scope
 
 **In:**
+
 - `node/` package: laptop microphone or wav-file input, YAMNet zero-training
   classifier (the parent spec's "Step A"), smoothing, signed observations and heartbeats, HTTP uplink.
 - A committed demo config located at the University of Helsinki city centre campus.
@@ -32,13 +33,15 @@ training data.
 
 ## 3. Node pipeline
 
-```
+```text
 AudioSource (mic | wav) -> 16 kHz mono -> Windower (0.96 s, 50 % hop)
   -> Classifier.score(window) -> drone score -> DetectionSmoother -> phase?
   -> Observation (signed) -> Uplink (HTTP, retry)      Heartbeat every 60 s
 ```
 
-- **AudioSource.** `MicSource` uses `sounddevice` at 16 kHz mono. `WavSource`
+- **AudioSource.** `MicSource` opens `sounddevice` directly at 16 kHz mono, so the OS driver
+  does the resampling. If the device refuses 16 kHz (some Linux/ALSA devices do), it opens at
+  the native rate and resamples in the node. `WavSource`
   reads a file, resamples to 16 kHz mono, and replays at real-time speed, or
   accelerated with `--speed`. Both yield timestamped float32 blocks.
 - **Windower.** A ring buffer that emits 15 600-sample windows every 7 800 samples,
@@ -48,6 +51,8 @@ AudioSource (mic | wav) -> 16 kHz mono -> Windower (0.96 s, 50 % hop)
   - `YamnetClassifier` loads the YAMNet `.tflite` model with `ai-edge-litert`, not full
     TensorFlow; `tflite-runtime` is abandoned. It returns the 521 class scores. ONNX via
     `onnxruntime` is the fallback if LiteRT does not run on Python 3.12 or macOS arm64.
+    The spike is time-boxed to 15 minutes. An ONNX model is used only from a source with
+    clear provenance and licence.
   - `FakeClassifier` is scripted, and is used in tests and CI.
 - **Drone score.** A weighted maximum over AudioSet classes, with "Propeller, airscrew"
   weighted highest, then "Helicopter", then "Aircraft"/"Aircraft engine". Buzz, insect
@@ -60,7 +65,8 @@ AudioSource (mic | wav) -> 16 kHz mono -> Windower (0.96 s, 50 % hop)
   any open detection is ended (an `end` is emitted) and a new smoother is created.
   Windows from before a dropout never count toward a new detection.
 - **Observation.** `source.type=acoustic_node`, the config location, `time_quality=ntp`,
-  and an `acoustic` block with a rough SNR (window RMS against a running noise floor)
+  and an `acoustic` block with a rough SNR: window RMS against a noise floor, where the floor is an exponential moving
+  average of the quietest window RMS in the last 10 s
   and the peak frequency.
 - **Signing and registration.** On first run the node generates an Ed25519 keypair
   and stores it in a gitignored key file next to its config. It registers via

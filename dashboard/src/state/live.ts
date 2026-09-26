@@ -48,6 +48,9 @@ export function startLive(deps: LiveDeps): () => void {
         for (const event of buffer) deps.dispatch({ type: "live", event, receivedAt: deps.now() });
         buffer = [];
         loading = false;
+        // Reset the backoff only once the connection is actually usable: a server that
+        // accepts sockets but fails the snapshot must not be retried every second.
+        attempt = 0;
         deps.dispatch({ type: "connection", connection: "live" });
       } catch {
         ws.close();
@@ -55,10 +58,10 @@ export function startLive(deps: LiveDeps): () => void {
     };
 
     ws.onopen = () => {
-      attempt = 0;
       void loadSnapshot();
     };
     ws.onmessage = (e) => {
+      if (socket !== ws) return; // a superseded socket's late message
       const event = JSON.parse(e.data) as LiveEvent;
       if (event.type === "resync") {
         buffer = [];
@@ -70,7 +73,8 @@ export function startLive(deps: LiveDeps): () => void {
       }
     };
     ws.onclose = () => {
-      if (stopped) return;
+      if (stopped || socket !== ws) return;
+      socket = null;
       deps.dispatch({ type: "connection", connection: "reconnecting" });
       deps.schedule(connect, backoffDelay(attempt++));
     };

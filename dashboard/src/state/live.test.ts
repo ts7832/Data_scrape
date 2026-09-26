@@ -74,4 +74,61 @@ describe("live connection", () => {
     h.sockets[0].onclose?.();
     expect(h.timers.length).toBe(0);
   });
+
+  it("ignores messages from a superseded socket", async () => {
+    const h = harness();
+    h.sockets[0].onopen!();
+    h.resolve();
+    await flush();
+    h.sockets[0].onclose!();
+    h.timers[0].fn();
+    const before = h.actions.length;
+    h.sockets[0].onmessage!({ data: JSON.stringify({ type: "node_status", data: { node_id: "ghost" } }) });
+    expect(h.actions.length).toBe(before);
+  });
+
+  it("a late close from a superseded socket does not schedule a second reconnect", () => {
+    const h = harness();
+    h.sockets[0].onclose!();
+    h.timers[0].fn();
+    h.sockets[0].onclose!();
+    expect(h.timers.length).toBe(1);
+  });
+
+  it("keeps backing off while the snapshot keeps failing", async () => {
+    const sockets: FakeSocket[] = [];
+    const timers: number[] = [];
+    let pending: (() => void)[] = [];
+    startLive({
+      url: "ws://x/v1/live",
+      openSocket: () => {
+        const s = new FakeSocket();
+        s.close = () => { s.closed = true; s.onclose?.(); };
+        sockets.push(s);
+        return s;
+      },
+      fetchSnapshot: () => new Promise((_, reject) => { pending.push(() => reject(new Error("503"))); }),
+      dispatch: () => {},
+      schedule: (fn, ms) => { timers.push(ms); pending.push(fn); },
+      now: () => 0,
+    });
+    for (let i = 0; i < 3; i++) {
+      sockets.at(-1)!.onopen!();
+      const run = pending; pending = [];
+      for (const fn of run) fn();       // snapshot fails -> close -> schedule reconnect
+      await flush();
+      const again = pending; pending = [];
+      for (const fn of again) fn();     // run the scheduled reconnect
+    }
+    expect(timers).toEqual([1000, 2000, 4000]);
+  });
+
+  it("stop while a snapshot is loading prevents its dispatch", async () => {
+    const h = harness();
+    h.sockets[0].onopen!();
+    h.stop();
+    h.resolve();
+    await flush();
+    expect(h.actions.some((a) => a.type === "snapshot")).toBe(false);
+  });
 });

@@ -10,6 +10,8 @@ from pathlib import Path
 from kuulo_protocol.models import NODE_ID_PATTERN, SensorLocation, TimeQuality
 from kuulo_protocol.smoothing import SmootherConfig
 
+from .impulse import ImpulseConfig
+
 
 class ConfigError(ValueError):
     pass
@@ -41,6 +43,7 @@ class NodeConfig:
     traces: TraceConfig = TraceConfig()
     classifier: str = "yamnet"  # "yamnet" (Step A), "head" (Step B), "auto" (B if trained)
     head_path: Path | None = None
+    impulse: ImpulseConfig = ImpulseConfig()
 
 
 def _require(table: dict, key: str, where: str):
@@ -105,6 +108,22 @@ def load_config(path: Path) -> NodeConfig:
     )
     if not 0 <= traces.sample_rate <= 1:
         raise ConfigError(f"[traces] sample_rate must be in [0, 1], got {traces.sample_rate}")
+    im = raw.get("impulse", {})
+    idef = ImpulseConfig()
+    impulse = ImpulseConfig(
+        enabled=bool(im.get("enabled", idef.enabled)),
+        trigger_db=float(im.get("trigger_db", idef.trigger_db)),
+        min_peak_dbfs=float(im.get("min_peak_dbfs", idef.min_peak_dbfs)),
+        dead_time_s=float(im.get("dead_time_s", idef.dead_time_s)),
+        post_s=float(im.get("post_s", idef.post_s)),
+    )
+    if impulse.trigger_db <= 0:
+        raise ConfigError(f"[impulse] trigger_db must be positive, got {impulse.trigger_db}")
+    if impulse.post_s <= 0:
+        raise ConfigError(f"[impulse] post_s must be positive, got {impulse.post_s}")
+    if impulse.dead_time_s < impulse.post_s:
+        raise ConfigError("[impulse] dead_time_s must be >= post_s, got "
+                          f"dead_time_s={impulse.dead_time_s}, post_s={impulse.post_s}")
     return NodeConfig(
         node_id=node_id,
         server_url=server_url,
@@ -119,4 +138,5 @@ def load_config(path: Path) -> NodeConfig:
         traces=traces,
         classifier=classifier,
         head_path=head_path,
+        impulse=impulse,
     )

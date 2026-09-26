@@ -8,6 +8,7 @@ import queue
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +34,7 @@ class AudioBlock:
     samples: np.ndarray  # float32, mono, 16 kHz
     t: float  # audio time of the first sample, seconds
     restart: bool = False  # the source reopened; earlier audio is not contiguous
+    utc: datetime | None = None  # UTC of the first sample, when known (impulse onset timing)
 
 
 @dataclass(frozen=True)
@@ -85,16 +87,36 @@ def wav_source(
     speed: float = 1.0,
     block_s: float = 0.1,
     sleep: Callable[[float], None] = time.sleep,
+    start_utc: datetime | None = None,
 ) -> Iterator[AudioBlock]:
-    """Replay a file as if it were live. speed=1 is real time; speed<=0 is as fast as possible."""
+    """Replay a file as if it were live. speed=1 is real time; speed<=0 is as fast as possible.
+
+    Blocks are timestamped start_utc + audio time: at speed != 1 this is audio time, not the
+    wall clock at which a block was actually produced.
+    """
+    start_utc = start_utc if start_utc is not None else datetime.now(UTC)
     data, rate = sf.read(str(path), dtype="float32", always_2d=False)
     x = to_mono_16k(data, rate)
     n = int(round(block_s * SAMPLE_RATE))
     for i in range(0, x.size, n):
         chunk = x[i : i + n]
-        yield AudioBlock(chunk, round(i / SAMPLE_RATE, 6))
+        t = round(i / SAMPLE_RATE, 6)
+        yield AudioBlock(chunk, t, utc=start_utc + timedelta(seconds=t))
         if speed > 0:
             sleep(chunk.size / SAMPLE_RATE / speed)
+
+
+def adc_utc(now: datetime, current_time: float, adc_time: float, frames: int, rate: float,
+            latency: float) -> datetime:
+    """UTC of a block's first sample from PortAudio's capture timestamp, when it is usable.
+
+    Some host APIs report inputBufferAdcTime as 0; then fall back to the buffer's length plus the
+    stream's reported input latency.
+    """
+    age = current_time - adc_time
+    if adc_time > 0 and 0 <= age < 1.0:
+        return now - timedelta(seconds=age)
+    return now - timedelta(seconds=frames / rate + max(latency, 0.0))
 
 
 def _open_stream(sd, block_s: float, q: queue.Queue):
@@ -102,21 +124,26 @@ def _open_stream(sd, block_s: float, q: queue.Queue):
 
     Returns (stream, rate).
     """
+    holder = {"latency": 0.0, "rate": SAMPLE_RATE}
 
-    def callback(indata, _frames, _time, status):
+    def callback(indata, frames, time_info, status):
         if status:
             log.debug("audio status: %s", status)
-        q.put(indata[:, 0].copy())
+        utc = adc_utc(datetime.now(UTC), time_info.currentTime, time_info.inputBufferAdcTime,
+                      frames, holder["rate"], holder["latency"])
+        q.put((indata[:, 0].copy(), utc))
 
     for rate in (SAMPLE_RATE, None):
         try:
             if rate is None:
                 rate = int(sd.query_devices(kind="input")["default_samplerate"])
+            holder["rate"] = rate
             stream = sd.InputStream(
                 samplerate=rate, channels=1, dtype="float32",
                 blocksize=int(block_s * rate), callback=callback,
             )
             stream.start()
+            holder["latency"] = stream.latency
             return stream, rate
         except sd.PortAudioError:
             if rate != SAMPLE_RATE:
@@ -144,7 +171,7 @@ def mic_source(
             stream_start = time.monotonic() - t0
             elapsed = 0.0  # audio-time consumed since this stream opened
             while True:
-                chunk = q.get(timeout=2.0)
+                chunk, utc = q.get(timeout=2.0)
                 # Timed by samples, not by time.monotonic() at dequeue: PortAudio's queue
                 # is unbounded, so a slow consumer (e.g. blocked on a synchronous uplink
                 # POST) never drops audio -- but reading the wall clock here would make
@@ -152,7 +179,7 @@ def mic_source(
                 t = stream_start + elapsed
                 elapsed += chunk.size / rate
                 samples = chunk if rate == SAMPLE_RATE else to_mono_16k(chunk, rate)
-                yield AudioBlock(samples, t, restart)
+                yield AudioBlock(samples, t, restart, utc=utc)
                 restart = False
         except (sd.PortAudioError, queue.Empty, OSError) as exc:
             log.error("%s (%s). Retrying in %.0f s.", MIC_HELP, exc, retry_s)

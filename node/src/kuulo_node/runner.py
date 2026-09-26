@@ -6,13 +6,21 @@ import logging
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
 import numpy as np
 
-from kuulo_protocol.models import Heartbeat, NodeRegistration, Observation, Phase
+from kuulo_protocol.impulses import ImpulseReport
+from kuulo_protocol.models import (
+    Heartbeat,
+    NodeRegistration,
+    Observation,
+    Phase,
+    Source,
+    SourceType,
+)
 from kuulo_protocol.signing import sign
 
 from . import __version__
@@ -21,6 +29,7 @@ from .audio import HOP_S, MIC_HELP, SAMPLE_RATE, AudioBlock, MicHealth, Windower
 from .classify import Classifier, drone_score
 from .config import NodeConfig
 from .detector import Detector, utc_now
+from .impulse import ImpulseDetector
 from .keys import NodeKeys
 from .tracestore import TraceStore
 
@@ -34,6 +43,7 @@ class RunStats:
     windows: int = 0
     observations: int = 0
     heartbeats: int = 0
+    impulses: int = 0
 
 
 def format_scores(t: float, drone: float, scores: dict[str, float]) -> str:
@@ -72,6 +82,8 @@ class NodeRunner:
         self._high_run_s = 0.0  # current run of windows at >= 0.8 in this detection
         self._max_high_run_s = 0.0
         self._ended: list[tuple] = []
+        self._impulses = ImpulseDetector(cfg.impulse) if cfg.impulse.enabled else None
+        self._utc_anchor: datetime | None = None  # UTC of audio time 0, when the source gives none
         # Opt-in only (--debug-save-clips): raw detection audio, written locally, never uploaded.
         self._clip_dir = debug_clip_dir
         self._clip: list[np.ndarray] = []
@@ -108,7 +120,29 @@ class NodeRunner:
         ):
             self._heartbeat()
 
+    def _fallback_utc(self, block: AudioBlock) -> datetime:
+        """When the audio source gives no UTC: anchor "audio time 0" on the first block seen."""
+        if self._utc_anchor is None:
+            self._utc_anchor = self._now() - timedelta(seconds=block.t)
+        return self._utc_anchor + timedelta(seconds=block.t)
+
+    def _emit_impulse(self, candidate) -> None:
+        report = ImpulseReport(
+            source=Source(type=SourceType.ACOUSTIC_NODE, id=self.cfg.node_id),
+            onset_at=candidate.onset_utc, onset_sigma_s=candidate.onset_sigma_s,
+            time_quality=self.cfg.time_quality, sensor_location=self.cfg.location,
+            features=candidate.features,
+        )
+        self.uplink.send("/v1/impulses", sign(report, self.keys.private_key))
+        self.stats.impulses += 1
+        log.warning("IMPULSE peak %.1f dBFS onset %s", candidate.features.peak_dbfs,
+                   candidate.onset_utc.isoformat())
+
     def _process(self, block: AudioBlock) -> None:
+        utc = block.utc if block.utc is not None else self._fallback_utc(block)
+        if self._impulses is not None:
+            for candidate in self._impulses.push(block, utc):
+                self._emit_impulse(candidate)
         if self.health.update(block):
             log.warning(MIC_HELP)
         for window in self._windower.push(block):

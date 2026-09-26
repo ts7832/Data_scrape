@@ -100,3 +100,16 @@ def test_yamnet_classifier_still_requires_weights(tmp_path):
 def test_unknown_classifier_is_rejected(tmp_path):
     with pytest.raises(ConfigError, match="classifier"):
         load_config(_config_with(tmp_path, 'classifier = "magic"'))
+
+
+def test_impulse_table_overrides_defaults(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text(EXAMPLE.read_text() + "\n[impulse]\ntrigger_db = 25\n")
+    assert load_config(path).impulse.trigger_db == 25
+
+
+def test_impulse_trigger_must_be_positive(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text(EXAMPLE.read_text() + "\n[impulse]\ntrigger_db = -1\n")
+    with pytest.raises(ConfigError, match="trigger_db"):
+        load_config(path)

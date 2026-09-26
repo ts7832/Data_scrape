@@ -1,12 +1,18 @@
 import logging
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
 from kuulo_node.audio import SAMPLE_RATE, AudioBlock
 from kuulo_node.classify import FakeClassifier
+from kuulo_node.impulse import ImpulseConfig
 from kuulo_node.keys import load_or_create_keys
 from kuulo_node.runner import NodeRunner, format_scores
 from kuulo_node.testing import PROPELLER, make_test_config
+from kuulo_protocol.signing import verify
+
+UTC0 = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
 
 
 class RecordingUplink:
@@ -125,3 +131,32 @@ def test_no_clips_are_written_by_default(tmp_path):
     r, _ = runner(tmp_path, lambda i: {PROPELLER: 0.9 if 3 <= i < 10 else 0.0})
     r.run(blocks(12))
     assert not list(tmp_path.rglob("*.wav"))
+
+
+def bang_blocks(seconds, at_s, utc0=UTC0):
+    rng = np.random.default_rng(0)
+    x = (rng.standard_normal(int(seconds * SAMPLE_RATE)) * 0.003).astype(np.float32)
+    n, i = int(0.4 * SAMPLE_RATE), int(at_s * SAMPLE_RATE)
+    decay = np.exp(-np.arange(n) / (0.03 * SAMPLE_RATE))
+    x[i:i + n] += (rng.standard_normal(n) * 0.5 * decay).astype(np.float32)
+    step = SAMPLE_RATE // 10
+    for k in range(0, x.size, step):
+        yield AudioBlock(x[k:k + step], k / SAMPLE_RATE,
+                         utc=utc0 + timedelta(seconds=k / SAMPLE_RATE))
+
+
+def test_a_bang_in_the_audio_is_reported_with_its_utc_onset(tmp_path):
+    r, up = runner(tmp_path, lambda i: {PROPELLER: 0.0})
+    r.run(bang_blocks(6, 3.0))
+    [report] = [m for p, m in up.sent if p == "/v1/impulses"]
+    assert verify(report, r.keys.public_key)
+    assert abs((report.onset_at - (UTC0 + timedelta(seconds=3))).total_seconds()) < 0.001
+    assert r.stats.impulses == 1
+
+
+def test_impulse_detection_can_be_disabled(tmp_path):
+    cfg = replace(make_test_config(tmp_path), impulse=ImpulseConfig(enabled=False))
+    up = RecordingUplink()
+    NodeRunner(cfg, load_or_create_keys(cfg.key_file), FakeClassifier(lambda i: {}), up
+               ).run(bang_blocks(6, 3.0))
+    assert not [p for p, _ in up.sent if p == "/v1/impulses"]

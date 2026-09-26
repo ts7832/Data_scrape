@@ -42,3 +42,13 @@ update_every_s = 5.0
 # budget_mb = 500           # local disk budget, least valuable traces evicted first
 # upload_mb_per_day = 50    # for auto-push and hard-negative samples; server requests bypass it
 # sample_rate = 0.01        # share of uncorroborated detections uploaded as hard negatives
+
+# Impulse detection (a blast or a hard crash): a sharp, broadband event, reported separately
+# from the drone classifier above. No waveform ever leaves the node. Defaults shown; uncomment
+# an [impulse] table to change them.
+# [impulse]
+# enabled = true
+# trigger_db = 20.0     # short/long-term energy ratio that fires the trigger
+# min_peak_dbfs = -40.0 # quieter bangs than this are ignored
+# post_s = 1.0          # audio kept after the trigger, for feature extraction
+# dead_time_s = 2.0     # minimum gap before another impulse can be reported (echo suppression)

@@ -49,6 +49,14 @@ def test_full_without_heartbeats_drops_oldest_observation_and_counts():
     assert bodies(box) == ["o2", "o3"] and box.dropped == 2
 
 
+def test_full_outbox_drops_heartbeats_then_observations_then_impulses():
+    box = Outbox(cap=2)
+    box.put("/v1/impulses", "i1")
+    box.put("/v1/observations", "o1")
+    box.put("/v1/impulses", "i2")
+    assert [b for _, _, b in box.peek(5)] == ["i1", "i2"]
+
+
 def test_order_is_kept_after_drops_and_reopen(tmp_path):
     path = tmp_path / "outbox.db"
     box = Outbox(path, cap=3)

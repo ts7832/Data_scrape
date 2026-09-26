@@ -13,6 +13,11 @@ from pathlib import Path
 
 log = logging.getLogger("kuulo.node")
 HEARTBEATS = "/v1/heartbeats"
+OBSERVATIONS = "/v1/observations"
+# Drop priority when the outbox is full: heartbeats first (a newer one says the same thing),
+# then observations, then the oldest row of any path (impulses are dropped last: they are
+# rare and safety-relevant).
+DROP_ORDER = (HEARTBEATS, OBSERVATIONS)
 
 
 class Outbox:
@@ -34,9 +39,15 @@ class Outbox:
     def put(self, path: str, body: str) -> None:
         with self._db:
             while len(self) >= self.cap:
-                row = self._db.execute(
-                    "SELECT id FROM outbox WHERE path = ? ORDER BY id LIMIT 1", (HEARTBEATS,)
-                ).fetchone() or self._db.execute(
+                row = None
+                for candidate_path in DROP_ORDER:
+                    row = self._db.execute(
+                        "SELECT id FROM outbox WHERE path = ? ORDER BY id LIMIT 1",
+                        (candidate_path,),
+                    ).fetchone()
+                    if row is not None:
+                        break
+                row = row or self._db.execute(
                     "SELECT id FROM outbox ORDER BY id LIMIT 1"
                 ).fetchone()
                 self._db.execute("DELETE FROM outbox WHERE id = ?", row)

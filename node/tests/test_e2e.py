@@ -12,6 +12,23 @@ from kuulo_server.app import create_app
 from kuulo_server.config import Settings
 
 
+def test_wav_bang_through_real_server_creates_a_coarse_impulse_event(tmp_path):
+    rng = np.random.default_rng(0)
+    x = (rng.standard_normal(16000 * 6) * 0.003).astype(np.float32)
+    n, i = int(0.4 * 16000), 3 * 16000
+    x[i:i + n] += (rng.standard_normal(n) * 0.5 * np.exp(-np.arange(n) / 480)).astype(np.float32)
+    wav = tmp_path / "bang.wav"
+    sf.write(wav, x, 16000)
+    cfg = make_test_config(tmp_path)
+    app = create_app(Settings(db_path=tmp_path / "kuulo.db", tick_interval_s=None))
+    with TestClient(app) as client:
+        clf = FakeClassifier(lambda i: {PROPELLER: 0.0})
+        NodeRunner(cfg, load_or_create_keys(cfg.key_file), clf, Uplink(client)).run(
+            wav_source(wav, speed=0))
+        [event] = client.get("/v1/impulse-events").json()
+    assert event["quality"] == "coarse" and event["node_ids"] == ["test-node"]
+
+
 def test_wav_replay_through_real_server_creates_tentative_track(tmp_path):
     wav = tmp_path / "clip.wav"
     t = np.arange(44100 * 12) / 44100

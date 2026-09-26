@@ -1,5 +1,6 @@
 import sys
 import time
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pytest
@@ -12,10 +13,28 @@ from kuulo_node.audio import (
     AudioBlock,
     MicHealth,
     Windower,
+    adc_utc,
     mic_source,
     to_mono_16k,
     wav_source,
 )
+
+NOW = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
+
+
+def test_adc_timestamp_is_used_when_valid():
+    assert adc_utc(NOW, 100.050, 100.010, 1600, 16000, 0.02) == NOW - timedelta(seconds=0.04)
+
+
+def test_missing_adc_timestamp_falls_back_to_buffer_length_plus_latency():
+    assert adc_utc(NOW, 100.0, 0.0, 1600, 16000, 0.02) == NOW - timedelta(seconds=0.12)
+
+
+def test_wav_source_stamps_blocks_from_start_utc(tmp_path):
+    path = tmp_path / "s.wav"
+    sf.write(path, np.zeros(16000, np.float32), 16000)
+    blocks = list(wav_source(path, speed=0, start_utc=NOW))
+    assert blocks and all(b.utc == NOW + timedelta(seconds=b.t) for b in blocks)
 
 
 def blocks(n_blocks, block=1600, start=0.0, value=0.1):
@@ -81,9 +100,19 @@ def test_mic_health_flips_after_10s_of_digital_silence_and_recovers():
     assert h.ok
 
 
+class _FakeTimeInfo:
+    """PortAudio's per-callback time_info: both 0 here, so adc_utc falls back to
+    buffer-length-plus-latency (the "some host APIs report inputBufferAdcTime as 0" path)."""
+
+    currentTime = 0.0
+    inputBufferAdcTime = 0.0
+
+
 class _FakeInputStream:
     """Delivers 6 fake blocks synchronously in start(), exactly as PortAudio's callback
     would -- but with no real concurrency, so the test controls exactly what's queued."""
+
+    latency = 0.0
 
     def __init__(self, *, samplerate, channels, dtype, blocksize, callback):
         self.blocksize = blocksize
@@ -92,7 +121,7 @@ class _FakeInputStream:
     def start(self):
         chunk = np.full((self.blocksize, 1), 0.05, np.float32)
         for _ in range(6):
-            self._callback(chunk, self.blocksize, None, None)
+            self._callback(chunk, self.blocksize, _FakeTimeInfo(), None)
 
     def close(self):
         pass

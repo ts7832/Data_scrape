@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 from contextlib import asynccontextmanager
+from typing import Annotated
 
 from fastapi import (
     FastAPI,
@@ -197,10 +198,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             detail = track_detail(session, track_id, settings.clock())
             if detail is None:
                 raise HTTPException(status_code=404, detail="unknown track")
-            return detail.model_copy(update={"trace_segments": segment_count(session, detail.track)})
+            segments = segment_count(session, detail.track)
+            return detail.model_copy(update={"trace_segments": segments})
 
     @app.post("/v1/traces")
-    async def post_trace(header: str = Form(...), body: UploadFile = File(...)) -> dict:
+    async def post_trace(
+        header: Annotated[str, Form()], body: Annotated[UploadFile, File()]
+    ) -> dict:
         """One signed FeatureTrace segment: JSON header field plus the .npz body file."""
         data = await body.read(settings.max_trace_bytes + 1)
         if len(data) > settings.max_trace_bytes:

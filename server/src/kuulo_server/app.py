@@ -11,21 +11,23 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import select
 
 from kuulo_protocol.api import IngestResult, LiveEvent, NodeStatus, NodeView, TrackDetail
 from kuulo_protocol.models import Heartbeat, NodeRegistration, Observation, Track
 
 from .config import Settings
-from .db import NodeRow, make_session_factory
+from .db import NodeRow, as_utc, make_session_factory
 from .fusion.context import DbFusionContext
 from .fusion.loader import load_engine
 from .ingest import IngestError, ingest_heartbeat, ingest_observation, register_node
 from .live import LiveHub
-from .status import node_view
+from .status import node_status, node_view
 from .tracks import close_open_tracks, open_tracks, persist_track, track_detail, uncorroborated_rate
 
 log = logging.getLogger("kuulo.server")
+OBSERVATION = TypeAdapter(Observation)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -62,11 +64,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         now = settings.clock()
         with sessions() as session:
             for row in session.scalars(select(NodeRow)):
-                view = view_of(session, row, now)
-                if last_status.get(row.node_id) not in (None, view.status):
-                    hub.publish(LiveEvent(type="node_status", data=view))
-                last_status[row.node_id] = view.status
+                status = node_status(as_utc(row.last_heartbeat_at), now)
+                if last_status.get(row.node_id) not in (None, status):
+                    # The noisy-node rate is a 24 h query: only pay for it when publishing.
+                    hub.publish(LiveEvent(type="node_status", data=view_of(session, row, now)))
+                last_status[row.node_id] = status
         run_fusion(lambda ctx: engine.on_tick(now, ctx))
+
+    def ingest_one(obs: Observation) -> IngestResult:
+        with sessions() as session:
+            result = ingest_observation(session, obs, settings.clock(), settings)
+        if result.status == "accepted" and not result.late:
+            hub.publish(LiveEvent(type="observation", data=obs))
+            run_fusion(lambda ctx: engine.on_observation(obs, ctx))
+        return result
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -114,13 +125,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "registered"}
 
     @app.post("/v1/observations")
-    async def post_observation(obs: Observation) -> IngestResult:
-        with sessions() as session:
-            result = ingest_observation(session, obs, settings.clock(), settings)
-        if result.status == "accepted" and not result.late:
-            hub.publish(LiveEvent(type="observation", data=obs))
-            run_fusion(lambda ctx: engine.on_observation(obs, ctx))
-        return result
+    async def post_observation(request: Request):
+        """One Observation, or a JSON array of 1..max_batch with one result per item."""
+        try:
+            body = await request.json()
+        except ValueError:
+            return JSONResponse(status_code=400, content={"detail": "body is not JSON"})
+        if not isinstance(body, list):
+            try:
+                obs = OBSERVATION.validate_python(body)
+            except ValidationError as exc:
+                raise RequestValidationError(exc.errors()) from exc
+            return ingest_one(obs)
+        if not 1 <= len(body) <= settings.max_batch:
+            return JSONResponse(status_code=400, content={
+                "detail": f"a batch must hold 1 to {settings.max_batch} observations"})
+        results: list[dict] = []
+        for item in body:
+            try:
+                results.append(ingest_one(OBSERVATION.validate_python(item)).model_dump())
+            except ValidationError as exc:
+                reason = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}"
+                                   for e in exc.errors())
+                results.append({"status": "rejected", "reason": reason})
+            except IngestError as exc:
+                results.append({"status": "rejected", "reason": exc.reason})
+        return results
 
     @app.post("/v1/heartbeats")
     async def post_heartbeat(hb: Heartbeat) -> dict:
@@ -152,6 +182,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.websocket("/v1/live")
     async def live(ws: WebSocket) -> None:
+        origin = ws.headers.get("origin")
+        if origin is not None and origin not in settings.allowed_origins:
+            await ws.close(code=1008)
+            return
         await ws.accept()
         queue = hub.subscribe()
         try:

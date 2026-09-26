@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal
@@ -160,3 +162,14 @@ class NodeRegistration(WireModel):
     public_key: str = Field(min_length=1)
     location: SensorLocation
     time_quality: TimeQuality
+
+    @field_validator("public_key")
+    @classmethod
+    def _ed25519_public_key(cls, value: str) -> str:
+        try:
+            raw = base64.b64decode(value, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("public_key must be base64") from exc
+        if len(raw) != 32:
+            raise ValueError("public_key must be a 32-byte Ed25519 key")
+        return value

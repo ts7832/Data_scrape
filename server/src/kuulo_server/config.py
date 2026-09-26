@@ -23,3 +23,10 @@ class Settings:
     late_after_s: float = 60.0
     fusion_engine: str = "kuulo_server.fusion.basic:BasicFusion"
     on_track_update: Callable[[Track], None] | None = None
+    # Browsers send Origin on WebSocket upgrades and do not apply CORS to them, so any web page
+    # could otherwise read the live feed from a local server. Non-browser clients send none.
+    allowed_origins: tuple[str, ...] = (
+        "http://127.0.0.1:5173", "http://localhost:5173",
+        "http://127.0.0.1:8000", "http://localhost:8000",
+    )
+    max_batch: int = 100

@@ -5,7 +5,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, create_engine, event
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Integer,
+    String,
+    Text,
+    create_engine,
+    event,
+    inspect,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
@@ -30,6 +40,8 @@ class NodeRow(Base):
     time_quality: Mapped[str] = mapped_column(String(16))
     registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The node's own sent_at of the newest accepted heartbeat: an older (replayed) one is refused.
+    last_heartbeat_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     software_version: Mapped[str | None] = mapped_column(String(32))
     mic_ok: Mapped[bool | None] = mapped_column(Boolean)
     queue_depth: Mapped[int | None] = mapped_column(Integer)
@@ -74,4 +86,18 @@ def make_session_factory(db_path: Path) -> sessionmaker:
         cursor.close()
 
     Base.metadata.create_all(engine)
+    _add_missing_columns(engine)
     return sessionmaker(engine, expire_on_commit=False)
+
+
+def _add_missing_columns(engine) -> None:
+    """create_all never alters existing tables: add columns a newer version introduced."""
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            existing = {c["name"] for c in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name not in existing:
+                    kind = column.type.compile(engine.dialect)
+                    ddl = f'ALTER TABLE {table.name} ADD COLUMN "{column.name}" {kind}'
+                    conn.execute(text(ddl))

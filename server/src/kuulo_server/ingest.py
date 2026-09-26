@@ -11,7 +11,7 @@ from kuulo_protocol.models import Heartbeat, NodeRegistration, Observation
 from kuulo_protocol.signing import verify
 
 from .config import Settings
-from .db import NodeRow, ObservationRow
+from .db import NodeRow, ObservationRow, as_utc
 
 
 class IngestError(Exception):
@@ -78,7 +78,11 @@ def ingest_heartbeat(session: Session, hb: Heartbeat, now: datetime, settings: S
     if not verify(hb, node.public_key):
         raise IngestError(401, "bad signature")
     _check_not_future(hb.sent_at, now, settings, "sent_at")
+    newest = as_utc(node.last_heartbeat_sent_at)
+    if newest is not None and hb.sent_at <= newest:
+        raise IngestError(409, "stale heartbeat: not newer than the last accepted one")
     node.last_heartbeat_at = now
+    node.last_heartbeat_sent_at = hb.sent_at
     node.software_version = hb.software_version
     node.mic_ok = hb.mic_ok
     node.queue_depth = hb.queue_depth

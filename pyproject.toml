@@ -3,7 +3,7 @@ name = "kuulo"
 version = "0.1.0"
 description = "Civic acoustic drone-detection network"
 requires-python = ">=3.12,<3.13"
-dependencies = ["kuulo-protocol", "kuulo-server", "kuulo-sim", "kuulo-node"]
+dependencies = ["kuulo-protocol", "kuulo-server", "kuulo-sim", "kuulo-node", "kuulo-ml"]
 
 [tool.uv]
 package = false
@@ -13,21 +13,22 @@ kuulo-protocol = { workspace = true }
 kuulo-server = { workspace = true }
 kuulo-sim = { workspace = true }
 kuulo-node = { workspace = true }
+kuulo-ml = { workspace = true }
 
 [tool.uv.workspace]
-members = ["protocol", "server", "sim", "node"]
+members = ["protocol", "server", "sim", "node", "ml"]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6", "httpx>=0.27"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib -q"
-testpaths = ["protocol/tests", "server/tests", "sim/tests", "node/tests"]
+testpaths = ["protocol/tests", "server/tests", "sim/tests", "node/tests", "ml/tests"]
 # Defense-in-depth: workspace packages are also installed editable via uv, but that
 # install has been observed to intermittently drop a member from sys.path in this
 # environment (see docs/superpowers/plans/PROGRESS.md). Belt-and-suspenders so test
 # collection never depends solely on that install being in a good state.
-pythonpath = ["protocol/src", "server/src", "sim/src", "node/src"]
+pythonpath = ["protocol/src", "server/src", "sim/src", "node/src", "ml/src"]
 
 [tool.ruff]
 line-length = 100
@@ -37,4 +38,4 @@ target-version = "py312"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["kuulo_protocol", "kuulo_server", "kuulo_sim", "kuulo_node"]
+known-first-party = ["kuulo_protocol", "kuulo_server", "kuulo_sim", "kuulo_node", "kuulo_ml"]

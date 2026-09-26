@@ -42,3 +42,16 @@ def test_yamnet_scores_silence_as_silence():
     scores = clf.score(np.zeros(WINDOW_SAMPLES, np.float32))
     assert len(scores) == 521
     assert max(scores, key=scores.get) == "Silence"
+
+
+@pytest.mark.skipif(not (MODELS / "yamnet.tflite").exists(), reason="model not downloaded")
+def test_embedder_returns_embedding_that_reproduces_yamnet_scores():
+    from kuulo_node.classify import YamnetEmbedder
+
+    emb = YamnetEmbedder(MODELS / "yamnet.tflite", MODELS / "yamnet_class_map.csv")
+    rng = np.random.default_rng(0)
+    out = emb.run((rng.standard_normal(WINDOW_SAMPLES) * 0.1).astype(np.float32))
+    assert out.embedding.shape == (1024,) and out.embedding.dtype == np.float32
+    assert out.scores.shape == (521,) and len(emb.names) == 521
+    logits = emb.head_weights @ out.embedding + emb.head_bias
+    assert np.max(np.abs(1 / (1 + np.exp(-logits)) - out.scores)) < 0.06

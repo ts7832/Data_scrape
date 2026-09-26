@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import csv
+import warnings
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -71,3 +73,63 @@ class YamnetClassifier:
         self._interp.invoke()
         out = self._interp.get_tensor(self._out_index).reshape(-1, len(self.names)).mean(axis=0)
         return dict(zip(self.names, (float(v) for v in out), strict=True))
+
+
+@dataclass(frozen=True)
+class YamnetOutput:
+    embedding: np.ndarray  # float32 [1024]: YAMNet's pooled penultimate layer
+    scores: np.ndarray  # float32 [521]: AudioSet class probabilities
+
+
+def _find(details: list[dict], suffix: str) -> dict:
+    matches = [d for d in details if d["name"].endswith(suffix)]
+    if len(matches) != 1:
+        raise ValueError(f"YAMNet model has no unique tensor ending in {suffix!r}")
+    return matches[0]
+
+
+class YamnetEmbedder:
+    """One YAMNet pass giving both the 1024-d embedding (Step B's input) and the class scores.
+
+    The MediaPipe model is int8-quantised inside, so the embedding tensor is dequantised with
+    its (scale, zero point). Reading an intermediate tensor needs the plain built-in kernels:
+    the default XNNPACK delegate computes the graph internally and never writes it.
+    """
+
+    EMBEDDING = "layer28/reduce_mean"
+    HEAD_WEIGHTS = "layer29/fc/MatMul"
+    HEAD_BIAS = "layer29/fc/biases"
+
+    def __init__(self, model_path: Path, class_map_path: Path) -> None:
+        from ai_edge_litert.interpreter import Interpreter, OpResolverType
+
+        self.names = load_class_names(class_map_path)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # "preserve_all_tensors is for debugging" notice
+            self._interp = Interpreter(
+                model_path=str(model_path), experimental_preserve_all_tensors=True,
+                experimental_op_resolver_type=OpResolverType.BUILTIN_WITHOUT_DEFAULT_DELEGATES,
+            )
+        self._interp.allocate_tensors()
+        details = self._interp.get_tensor_details()
+        self._in_index = self._interp.get_input_details()[0]["index"]
+        self._out_index = self._interp.get_output_details()[0]["index"]
+        self._emb = _find(details, self.EMBEDDING)
+        self.head_weights = self._dequantised(_find(details, self.HEAD_WEIGHTS))
+        self.head_bias = self._dequantised(_find(details, self.HEAD_BIAS))
+
+    def _dequantised(self, detail: dict) -> np.ndarray:
+        raw = self._interp.get_tensor(detail["index"])
+        scale, zero = detail["quantization"]
+        if scale == 0:  # float tensor
+            return raw.astype(np.float32)
+        return ((raw.astype(np.float32) - zero) * scale).astype(np.float32)
+
+    def run(self, window: np.ndarray) -> YamnetOutput:
+        x = np.asarray(window, dtype=np.float32).reshape(-1)
+        if x.size != WINDOW_SAMPLES:
+            raise ValueError(f"expected {WINDOW_SAMPLES} samples, got {x.size}")
+        self._interp.set_tensor(self._in_index, x)
+        self._interp.invoke()
+        scores = self._interp.get_tensor(self._out_index).reshape(-1).astype(np.float32)
+        return YamnetOutput(self._dequantised(self._emb).reshape(-1), scores)

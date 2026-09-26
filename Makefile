@@ -1,4 +1,4 @@
-.PHONY: dev server dashboard sim test types node model prepublish
+.PHONY: dev server dashboard sim test types node model prepublish datasets embed train evaluate ml
 
 SCENARIO ?= helsinki_pass
 SPEED ?= 1
@@ -39,6 +39,21 @@ node/config.local.toml:
 
 model:
 	uv run --no-sync python node/scripts/download_model.py
+
+# Step B (see ml/DATASETS.md for licences): ~1.3 GB of downloads, then a few minutes of CPU.
+datasets:
+	uv run --no-sync kuulo-ml datasets
+
+embed: model
+	uv run --no-sync kuulo-ml embed
+
+train:
+	uv run --no-sync kuulo-ml train
+
+evaluate:
+	uv run --no-sync kuulo-ml evaluate
+
+ml: datasets embed train evaluate
 
 node: $(NODE_CONFIG)
 	uv run --no-sync kuulo-node run --config $(NODE_CONFIG) $(if $(INPUT),--input $(INPUT)) $(if $(SPEED),--speed $(SPEED)) $(if $(SCORES),--print-scores)

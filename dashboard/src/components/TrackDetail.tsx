@@ -38,7 +38,7 @@ function Evidence({ detail }: { detail: Detail }) {
   const nodes = new Set(detail.observations.map((o) => o.source.id));
   return (
     <Section compact collapsible title="Evidence"
-      rightElement={<Tag minimal>{detail.observations.length} OBS · {nodes.size} NODES</Tag>}>
+      rightElement={<Tag minimal>{detail.observations.length} OBS · {nodes.size} NODES · {detail.trace_segments ?? 0} TRC</Tag>}>
       <SectionCard padded={false}>
         <HTMLTable compact striped>
           <colgroup>

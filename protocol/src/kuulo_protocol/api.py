@@ -30,6 +30,7 @@ class TrackDetail(WireModel):
     track: Track
     observations: list[Observation]
     silent_neighbours: list[NodeView]
+    trace_segments: int = 0
 
 
 class LiveEvent(WireModel):

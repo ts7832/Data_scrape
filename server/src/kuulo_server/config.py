@@ -30,3 +30,9 @@ class Settings:
         "http://127.0.0.1:8000", "http://localhost:8000",
     )
     max_batch: int = 100
+    traces_dir: Path | None = None  # None: a "traces" folder next to the database
+    max_trace_bytes: int = 4 * 1024 * 1024
+
+    def __post_init__(self) -> None:
+        if self.traces_dir is None:
+            self.traces_dir = self.db_path.parent / "traces"

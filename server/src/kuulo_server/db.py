@@ -68,6 +68,32 @@ class TrackRow(Base):
     raw_json: Mapped[str] = mapped_column(Text)
 
 
+class TraceRow(Base):
+    __tablename__ = "traces"
+    trace_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(64), index=True)
+    detection_id: Mapped[str] = mapped_column(String(36), index=True)
+    segment_index: Mapped[int] = mapped_column(Integer)
+    final: Mapped[bool] = mapped_column(Boolean)
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    frame_count: Mapped[int] = mapped_column(Integer)
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    header_json: Mapped[str] = mapped_column(Text)
+
+
+class TraceRequestRow(Base):
+    """The server wants every segment of (node, detection); closed when fulfilled or unavailable."""
+
+    __tablename__ = "trace_requests"
+    request_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(64), index=True)
+    detection_id: Mapped[str] = mapped_column(String(36), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    close_reason: Mapped[str | None] = mapped_column(String(16))
+
+
 class TrackObservationRow(Base):
     __tablename__ = "track_observations"
     track_id: Mapped[str] = mapped_column(String(36), primary_key=True)

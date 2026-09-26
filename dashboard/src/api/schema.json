@@ -750,6 +750,11 @@
           "title": "Silent Neighbours",
           "type": "array"
         },
+        "trace_segments": {
+          "default": 0,
+          "title": "Trace Segments",
+          "type": "integer"
+        },
         "track": {
           "$ref": "#/$defs/Track"
         }

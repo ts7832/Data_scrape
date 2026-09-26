@@ -116,6 +116,7 @@ export type SentAt1 = string;
 export type Signature3 = string;
 export type Observations = Observation[];
 export type SilentNeighbours = NodeView[];
+export type TraceSegments = number;
 
 export interface KuuloSchema {
   FeatureTraceHeader?: FeatureTraceHeader;
@@ -271,5 +272,6 @@ export interface TraceUnavailable {
 export interface TrackDetail {
   observations: Observations;
   silent_neighbours: SilentNeighbours;
+  trace_segments?: TraceSegments;
   track: Track;
 }

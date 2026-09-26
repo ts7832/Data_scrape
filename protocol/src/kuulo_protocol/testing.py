@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 from uuid import UUID, uuid4
 
+import numpy as np
+
+from .features import BAND_EDGES_HZ, FRAME_PERIOD_MS, N_BANDS
 from .models import (
     Acoustic,
     Detection,
@@ -18,6 +22,8 @@ from .models import (
     SourceType,
     TimeQuality,
 )
+from .signing import sign
+from .traces import FeatureTraceHeader, encode_body
 
 
 def make_observation(
@@ -52,3 +58,28 @@ def make_heartbeat(node_id: str = "n1", *, sent_at: datetime, mic_ok: bool = Tru
         mic_ok=mic_ok,
         queue_depth=0,
     )
+
+
+def make_trace(
+    node_id: str,
+    private_key: str,
+    detection_id: UUID,
+    *,
+    start_at: datetime,
+    segment_index: int = 0,
+    final: bool = True,
+    frames: int = 50,
+) -> tuple[FeatureTraceHeader, bytes]:
+    """A signed FeatureTrace segment with a valid synthetic body."""
+    body = encode_body(
+        t_offset_ms=np.arange(frames, dtype=np.int32) * FRAME_PERIOD_MS,
+        band_db=np.full((frames, N_BANDS), -40.0, np.float32),
+        rms_db=np.full(frames, -30.0, np.float32),
+        peak_freq_hz=np.full(frames, 180.0, np.float32),
+    )
+    header = FeatureTraceHeader(
+        node_id=node_id, detection_id=detection_id, segment_index=segment_index, final=final,
+        time_quality=TimeQuality.NTP, start_at=start_at, frame_count=frames,
+        band_edges_hz=list(BAND_EDGES_HZ), body_sha256=hashlib.sha256(body).hexdigest(),
+    )
+    return sign(header, private_key), body

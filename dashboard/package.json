@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
-    "gen:types": "cd .. && uv run python -m kuulo_protocol.schema > dashboard/src/api/schema.json && cd dashboard && npx json2ts -i src/api/schema.json -o src/api/types.ts"
+    "gen:types": "cd .. && uv run --no-sync python -m kuulo_protocol.schema > dashboard/src/api/schema.json && cd dashboard && npx json2ts -i src/api/schema.json -o src/api/types.ts"
   },
   "dependencies": {
     "@blueprintjs/core": "^6.20.0",

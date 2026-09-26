@@ -7,7 +7,16 @@ import contextlib
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -15,7 +24,8 @@ from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import select
 
 from kuulo_protocol.api import IngestResult, LiveEvent, NodeStatus, NodeView, TrackDetail
-from kuulo_protocol.models import Heartbeat, NodeRegistration, Observation, Track
+from kuulo_protocol.models import Heartbeat, NodeRegistration, Observation, Track, TrackStatus
+from kuulo_protocol.traces import FeatureTraceHeader, TraceRequest, TraceUnavailable
 
 from .config import Settings
 from .db import NodeRow, as_utc, make_session_factory
@@ -24,6 +34,13 @@ from .fusion.loader import load_engine
 from .ingest import IngestError, ingest_heartbeat, ingest_observation, register_node
 from .live import LiveHub
 from .status import node_status, node_view
+from .traces import (
+    create_requests_for_track,
+    mark_unavailable,
+    open_requests,
+    segment_count,
+    store_trace,
+)
 from .tracks import close_open_tracks, open_tracks, persist_track, track_detail, uncorroborated_rate
 
 log = logging.getLogger("kuulo.server")
@@ -46,6 +63,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with sessions() as session:
             for update in updates:
                 persist_track(session, update.track)
+                if update.track.status is TrackStatus.CONFIRMED:
+                    create_requests_for_track(session, update.track, settings.clock())
         for update in updates:
             hub.publish(LiveEvent(type="track", data=update.track))
             if settings.on_track_update:
@@ -176,9 +195,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def get_track(track_id: str) -> TrackDetail:
         with sessions() as session:
             detail = track_detail(session, track_id, settings.clock())
-        if detail is None:
-            raise HTTPException(status_code=404, detail="unknown track")
-        return detail
+            if detail is None:
+                raise HTTPException(status_code=404, detail="unknown track")
+            return detail.model_copy(update={"trace_segments": segment_count(session, detail.track)})
+
+    @app.post("/v1/traces")
+    async def post_trace(header: str = Form(...), body: UploadFile = File(...)) -> dict:
+        """One signed FeatureTrace segment: JSON header field plus the .npz body file."""
+        data = await body.read(settings.max_trace_bytes + 1)
+        if len(data) > settings.max_trace_bytes:
+            raise IngestError(400, f"trace body exceeds {settings.max_trace_bytes} bytes")
+        try:
+            parsed = FeatureTraceHeader.model_validate_json(header)
+        except ValidationError as exc:
+            raise IngestError(400, f"invalid trace header: {exc.error_count()} error(s)") from exc
+        with sessions() as session:
+            status = store_trace(session, parsed, data, settings.traces_dir, settings.clock())
+        return {"status": status}
+
+    @app.get("/v1/traces/requests")
+    async def get_trace_requests(node_id: str) -> list[TraceRequest]:
+        with sessions() as session:
+            return open_requests(session, node_id)
+
+    @app.post("/v1/traces/unavailable")
+    async def post_trace_unavailable(msg: TraceUnavailable) -> dict:
+        with sessions() as session:
+            mark_unavailable(session, msg, settings.clock())
+        return {"status": "closed"}
 
     @app.websocket("/v1/live")
     async def live(ws: WebSocket) -> None:

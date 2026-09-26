@@ -1,3 +1,31 @@
+# Kuulo progress
+
+## Part 3 (2026-09-26): Milestone 1 completion
+
+Plan: `docs/superpowers/plans/2026-09-26-kuulo-part3-milestone1-completion.md`.
+
+- **Step B classifier:** licensed data (DroneNoise CC BY 4.0 + ESC-50 CC BY-NC), leak-free
+  flight-level splits, training-only augmentation, YAMNet embedding → MLP head → ONNX.
+  Held-out: F1 0.916 per window; 46/46 drone recordings detected, median 1.95 s to START.
+  Step A (zero-training YAMNet) detects 0/46: it hears distant drones as "Silence".
+  `make ml` reproduces everything; results in `ml/RESULTS.md`.
+- **Feature traces end to end:** node recorder (3 s pre-roll, 60 s segments, 500 MB budget with
+  priority eviction), server pull on confirmation, auto-push (≥0.8 for ≥20 s), 1 % hard-negative
+  sampling capped at 3 min, 50 MB/day budget, "unavailable" replies; simulator synthesises
+  traces with Doppler; `long_event` scenario uploads ≥10 segments for one detection.
+- **Node:** durable SQLite outbox (10 000 cap, heartbeats dropped first), batched observation
+  delivery, `classifier = "auto"`, opt-in `--debug-save-clips`.
+- **Server:** batch ingest, trace storage and requests, Ed25519 key validation, heartbeat replay
+  guard, WebSocket Origin check, cheaper tick, additive column migration.
+- **Dashboard:** reconnect races fixed; evidence panel shows trace segment count.
+- **Real-audio end to end:** a held-out flight replayed in real time through `kuulo-node` gave
+  START after 2.1 s and a TENTATIVE track on a live server.
+
+Still needs a person: the dashboard demo GIF recorded in a browser, pushing to GitHub (the
+project settings deny `git push` to the agent), and a real-microphone trial in a city.
+
+---
+
 # Kuulo Part 1 — overnight build: morning summary
 
 Plan: `docs/superpowers/plans/2026-09-24-kuulo-part1-core-pipeline.md` — all 9 tasks complete,

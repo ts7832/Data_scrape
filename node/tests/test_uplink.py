@@ -192,3 +192,24 @@ def test_pending_messages_survive_a_node_restart(tmp_path):
     up.ensure_registered(REG)
     up.flush()
     assert seen[-1][0]["detection"]["confidence"] == 0.07 and up.pending_count == 0
+
+
+def test_older_server_without_batch_support_gets_messages_one_by_one():
+    seen = []
+
+    def old_server(request):
+        body = json.loads(request.content)
+        if request.url.path == "/v1/observations":
+            if isinstance(body, list):  # pre-batch server: a list fails validation
+                return httpx.Response(400, json={"detail": [{"msg": "not an object"}]})
+            seen.append(body["detection"]["confidence"])
+            return httpx.Response(200, json={"status": "accepted", "late": False})
+        return httpx.Response(200)
+
+    up = Uplink(client(old_server))
+    up.ensure_registered(REG)
+    for i in (1, 2, 3):
+        up.send("/v1/observations", obs(i))
+    up.flush()
+    assert seen == [0.01, 0.02, 0.03]
+    assert up.pending_count == 0 and up.dropped == 0

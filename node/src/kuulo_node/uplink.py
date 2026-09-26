@@ -17,6 +17,13 @@ log = logging.getLogger("kuulo.node")
 OBSERVATIONS = "/v1/observations"
 
 
+def _json(r: httpx.Response):
+    try:
+        return r.json()
+    except ValueError:
+        return None
+
+
 class RegistrationConflict(RuntimeError):
     pass
 
@@ -43,6 +50,7 @@ class Uplink:
         self._next_try = 0.0
         self.registered = False
         self._rejected = 0
+        self._batching = True  # switched off if the server predates batch ingest
 
     @property
     def pending_count(self) -> int:
@@ -98,7 +106,7 @@ class Uplink:
 
     def _next_run(self) -> list[tuple[int, str, str]]:
         rows = self.outbox.peek(self.max_batch)
-        if not rows or rows[0][1] != OBSERVATIONS:
+        if not rows or rows[0][1] != OBSERVATIONS or not self._batching:
             return rows[:1]
         run = []
         for row in rows:
@@ -124,7 +132,7 @@ class Uplink:
             return
         while run := self._next_run():
             path = run[0][1]
-            batch = path == OBSERVATIONS
+            batch = path == OBSERVATIONS and self._batching
             content = "[" + ",".join(body for _, _, body in run) + "]" if batch else run[0][2]
             r = self._post(path, content)
             if r is None:
@@ -132,6 +140,12 @@ class Uplink:
             if r.status_code == 401:  # server forgot us (fresh database): register again
                 self.registered = False
                 return
+            if batch and not isinstance(_json(r), list) and r.status_code in (200, 400, 422):
+                # An older server validates the body as one Observation and rejects the list:
+                # nothing in it was judged, so resend the same messages one at a time.
+                log.info("server does not accept batches; sending observations singly")
+                self._batching = False
+                continue
             if r.status_code >= 400:
                 for _ in run:
                     self._reject(path, f"HTTP {r.status_code} {r.text}")

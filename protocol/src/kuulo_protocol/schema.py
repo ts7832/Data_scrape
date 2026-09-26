@@ -9,9 +9,11 @@ from pydantic.json_schema import models_json_schema
 
 from .api import IngestResult, LiveEvent, NodeView, TrackDetail
 from .models import Heartbeat, NodeRegistration, Observation, Track
+from .traces import FeatureTraceHeader, TraceRequest, TraceUnavailable
 
 EXPORTED = (
     Observation, Heartbeat, Track, NodeRegistration, NodeView, TrackDetail, LiveEvent, IngestResult,
+    FeatureTraceHeader, TraceRequest, TraceUnavailable,
 )
 
 

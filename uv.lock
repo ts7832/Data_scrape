@@ -294,12 +294,14 @@ name = "kuulo-protocol"
 version = "0.1.0"
 source = { editable = "protocol" }
 dependencies = [
+    { name = "numpy" },
     { name = "pydantic" },
     { name = "pynacl" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "numpy", specifier = ">=1.26" },
     { name = "pydantic", specifier = ">=2.8" },
     { name = "pynacl", specifier = ">=1.5" },
 ]

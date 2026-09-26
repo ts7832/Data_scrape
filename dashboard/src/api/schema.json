@@ -9,6 +9,8 @@
           "type": "number"
         },
         "snr_db": {
+          "maximum": 150,
+          "minimum": -50,
           "title": "Snr Db",
           "type": "number"
         }
@@ -71,6 +73,96 @@
         "phase"
       ],
       "title": "EventRef",
+      "type": "object"
+    },
+    "FeatureTraceHeader": {
+      "additionalProperties": false,
+      "description": "One \u226460 s segment of one detection's features. `final` marks the detection's last segment.",
+      "properties": {
+        "band_edges_hz": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 33,
+          "minItems": 33,
+          "title": "Band Edges Hz",
+          "type": "array"
+        },
+        "body_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Body Sha256",
+          "type": "string"
+        },
+        "detection_id": {
+          "format": "uuid",
+          "title": "Detection Id",
+          "type": "string"
+        },
+        "final": {
+          "title": "Final",
+          "type": "boolean"
+        },
+        "frame_count": {
+          "maximum": 3000,
+          "minimum": 1,
+          "title": "Frame Count",
+          "type": "integer"
+        },
+        "frame_period_ms": {
+          "const": 20,
+          "default": 20,
+          "title": "Frame Period Ms",
+          "type": "integer"
+        },
+        "node_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Node Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segment_index": {
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Segment Index",
+          "type": "integer"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "start_at": {
+          "format": "date-time",
+          "title": "Start At",
+          "type": "string"
+        },
+        "time_quality": {
+          "$ref": "#/$defs/TimeQuality"
+        },
+        "trace_id": {
+          "format": "uuid",
+          "title": "Trace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_id",
+        "detection_id",
+        "segment_index",
+        "final",
+        "time_quality",
+        "start_at",
+        "frame_count",
+        "band_edges_hz",
+        "body_sha256"
+      ],
+      "title": "FeatureTraceHeader",
       "type": "object"
     },
     "GeoPoint": {
@@ -487,6 +579,79 @@
       "title": "TimeQuality",
       "type": "string"
     },
+    "TraceRequest": {
+      "additionalProperties": false,
+      "description": "The server wants every segment of this detection (it contributed to a confirmed track).",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "detection_id": {
+          "format": "uuid",
+          "title": "Detection Id",
+          "type": "string"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "string"
+        },
+        "request_id": {
+          "format": "uuid",
+          "title": "Request Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "node_id",
+        "detection_id",
+        "created_at"
+      ],
+      "title": "TraceRequest",
+      "type": "object"
+    },
+    "TraceUnavailable": {
+      "additionalProperties": false,
+      "description": "A node's signed answer that it no longer holds a requested detection's segments.",
+      "properties": {
+        "detection_id": {
+          "format": "uuid",
+          "title": "Detection Id",
+          "type": "string"
+        },
+        "node_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Node Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sent_at": {
+          "format": "date-time",
+          "title": "Sent At",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_id",
+        "detection_id",
+        "sent_at"
+      ],
+      "title": "TraceUnavailable",
+      "type": "object"
+    },
     "Track": {
       "additionalProperties": false,
       "description": "The server's belief that a drone is at a place, with its evidence.",
@@ -632,6 +797,9 @@
   },
   "additionalProperties": false,
   "properties": {
+    "FeatureTraceHeader": {
+      "$ref": "#/$defs/FeatureTraceHeader"
+    },
     "Heartbeat": {
       "$ref": "#/$defs/Heartbeat"
     },
@@ -649,6 +817,12 @@
     },
     "Observation": {
       "$ref": "#/$defs/Observation"
+    },
+    "TraceRequest": {
+      "$ref": "#/$defs/TraceRequest"
+    },
+    "TraceUnavailable": {
+      "$ref": "#/$defs/TraceUnavailable"
     },
     "Track": {
       "$ref": "#/$defs/Track"

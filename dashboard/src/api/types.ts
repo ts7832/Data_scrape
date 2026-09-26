@@ -5,13 +5,64 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
+/**
+ * @minItems 33
+ * @maxItems 33
+ */
+export type BandEdgesHz = [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number
+];
+export type BodySha256 = string;
+export type DetectionId = string;
+export type Final = boolean;
+export type FrameCount = number;
+export type FramePeriodMs = 20;
+export type NodeId = string;
+export type SchemaVersion = "1.0";
+export type SegmentIndex = number;
+export type Signature = string;
+export type StartAt = string;
+export type TimeQuality = "gps" | "ntp" | "manual";
+export type TraceId = string;
 export type CpuTempC = number | null;
 export type MicOk = boolean;
-export type NodeId = string;
+export type NodeId1 = string;
 export type QueueDepth = number;
-export type SchemaVersion = "1.0";
+export type SchemaVersion1 = "1.0";
 export type SentAt = string;
-export type Signature = string;
+export type Signature1 = string;
 export type SoftwareVersion = string;
 export type Late = boolean;
 export type Status = "accepted" | "duplicate";
@@ -21,19 +72,18 @@ export type SnrDb = number;
 export type BearingDeg = number | null;
 export type Confidence = number;
 export type Label = "drone_multirotor" | "drone_fixedwing_engine" | "aircraft" | "bird" | "unknown";
-export type DetectionId = string;
+export type DetectionId1 = string;
 export type Phase = "start" | "update" | "end";
 export type ObservationId = string;
 export type ObservedAt = string;
-export type SchemaVersion1 = "1.0";
+export type SchemaVersion2 = "1.0";
 export type AccuracyM = number;
 export type Lat = number;
 export type Lon = number;
-export type Signature1 = string;
+export type Signature2 = string;
 export type Id = string;
 export type SourceType =
   "acoustic_node" | "simulated_node" | "citizen_report" | "remote_id" | "adsb" | "external_network";
-export type TimeQuality = "gps" | "ntp" | "manual";
 export type Confidence1 = number;
 export type FirstSeen = string;
 export type LastSeen = string;
@@ -48,25 +98,55 @@ export type HeadingDeg = number;
 export type SpeedMps = number;
 export type LastHeartbeatAt = string | null;
 export type MicOk1 = boolean | null;
-export type NodeId1 = string;
+export type NodeId2 = string;
 export type SoftwareVersion1 = string | null;
 export type NodeStatus = "online" | "stale" | "offline";
 export type UncorroboratedRate24H = number | null;
 export type Type = "observation" | "track" | "node_status" | "resync";
-export type NodeId2 = string;
+export type NodeId3 = string;
 export type PublicKey = string;
+export type CreatedAt = string;
+export type DetectionId2 = string;
+export type NodeId4 = string;
+export type RequestId = string;
+export type DetectionId3 = string;
+export type NodeId5 = string;
+export type SchemaVersion3 = "1.0";
+export type SentAt1 = string;
+export type Signature3 = string;
 export type Observations = Observation[];
 export type SilentNeighbours = NodeView[];
 
 export interface KuuloSchema {
+  FeatureTraceHeader?: FeatureTraceHeader;
   Heartbeat?: Heartbeat;
   IngestResult?: IngestResult;
   LiveEvent?: LiveEvent;
   NodeRegistration?: NodeRegistration;
   NodeView?: NodeView;
   Observation?: Observation;
+  TraceRequest?: TraceRequest;
+  TraceUnavailable?: TraceUnavailable;
   Track?: Track;
   TrackDetail?: TrackDetail;
+}
+/**
+ * One ≤60 s segment of one detection's features. `final` marks the detection's last segment.
+ */
+export interface FeatureTraceHeader {
+  band_edges_hz: BandEdgesHz;
+  body_sha256: BodySha256;
+  detection_id: DetectionId;
+  final: Final;
+  frame_count: FrameCount;
+  frame_period_ms?: FramePeriodMs;
+  node_id: NodeId;
+  schema_version?: SchemaVersion;
+  segment_index: SegmentIndex;
+  signature?: Signature;
+  start_at: StartAt;
+  time_quality: TimeQuality;
+  trace_id?: TraceId;
 }
 /**
  * A node saying it is alive, so silence can be told apart from failure.
@@ -74,11 +154,11 @@ export interface KuuloSchema {
 export interface Heartbeat {
   cpu_temp_c?: CpuTempC;
   mic_ok: MicOk;
-  node_id: NodeId;
+  node_id: NodeId1;
   queue_depth: QueueDepth;
-  schema_version?: SchemaVersion;
+  schema_version?: SchemaVersion1;
   sent_at: SentAt;
-  signature?: Signature;
+  signature?: Signature1;
   software_version: SoftwareVersion;
 }
 export interface IngestResult {
@@ -101,9 +181,9 @@ export interface Observation {
   event: EventRef;
   observation_id?: ObservationId;
   observed_at: ObservedAt;
-  schema_version?: SchemaVersion1;
+  schema_version?: SchemaVersion2;
   sensor_location: SensorLocation;
-  signature?: Signature1;
+  signature?: Signature2;
   source: Source;
   time_quality: TimeQuality;
 }
@@ -117,7 +197,7 @@ export interface Detection {
   label: Label;
 }
 export interface EventRef {
-  detection_id: DetectionId;
+  detection_id: DetectionId1;
   phase: Phase;
 }
 export interface SensorLocation {
@@ -157,7 +237,7 @@ export interface NodeView {
   last_heartbeat_at?: LastHeartbeatAt;
   location: SensorLocation;
   mic_ok?: MicOk1;
-  node_id: NodeId1;
+  node_id: NodeId2;
   software_version?: SoftwareVersion1;
   status: NodeStatus;
   time_quality: TimeQuality;
@@ -165,9 +245,28 @@ export interface NodeView {
 }
 export interface NodeRegistration {
   location: SensorLocation;
-  node_id: NodeId2;
+  node_id: NodeId3;
   public_key: PublicKey;
   time_quality: TimeQuality;
+}
+/**
+ * The server wants every segment of this detection (it contributed to a confirmed track).
+ */
+export interface TraceRequest {
+  created_at: CreatedAt;
+  detection_id: DetectionId2;
+  node_id: NodeId4;
+  request_id: RequestId;
+}
+/**
+ * A node's signed answer that it no longer holds a requested detection's segments.
+ */
+export interface TraceUnavailable {
+  detection_id: DetectionId3;
+  node_id: NodeId5;
+  schema_version?: SchemaVersion3;
+  sent_at: SentAt1;
+  signature?: Signature3;
 }
 export interface TrackDetail {
   observations: Observations;

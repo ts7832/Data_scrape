@@ -2,7 +2,7 @@
 name = "kuulo-protocol"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["pydantic>=2.8", "pynacl>=1.5"]
+dependencies = ["pydantic>=2.8", "pynacl>=1.5", "numpy>=1.26"]
 
 [build-system]
 requires = ["hatchling"]

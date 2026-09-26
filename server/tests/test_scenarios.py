@@ -77,6 +77,21 @@ def test_long_event_confirms_and_uploads_a_multi_segment_trace(run_scenario):
     assert all(reason == "fulfilled" for _, _, reason in result.requests)
 
 
+def test_impact_strike_is_one_coarse_event_around_the_blast(run_scenario):
+    result = run_scenario("impact_strike")  # public CoarseLocator: grouping, no precise fix
+    [event] = result.impulse_events
+    [truth] = result.impulse_truth
+    assert event.quality.value == "coarse"
+    assert set(event.node_ids) == {n.id for n in result.run.scenario.nodes}
+    assert distance_m(event.position, truth.position) <= event.ellipse.semi_major_m
+
+
+def test_firework_far_from_drones_is_an_unassociated_impulse(run_scenario):
+    result = run_scenario("firework")
+    [event] = result.impulse_events
+    assert event.kind.value == "unassociated"
+
+
 def test_helsinki_pass_uploads_traces_only_for_requested_detections(run_scenario):
     result = run_scenario("helsinki_pass")
     requested = {(n, d) for n, d, _ in result.requests}

@@ -5,13 +5,14 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from kuulo_protocol.impulses import ImpulseEvent
 from kuulo_protocol.models import Track
 from kuulo_server.app import create_app
 from kuulo_server.config import Settings
 from kuulo_server.db import TraceRequestRow, TraceRow
 from kuulo_server.testing import T0, FakeClock, NodeKeys, register
-from kuulo_sim.engine import SimulationRun, TruthPoint
-from kuulo_sim.runner import TraceResponder
+from kuulo_sim.engine import ImpulseTruth, SimulationRun, TruthPoint
+from kuulo_sim.runner import PATHS, TraceResponder
 from kuulo_sim.scenario import load_scenario, resolve_scenario
 
 
@@ -43,6 +44,8 @@ class ScenarioResult:
     truth: list[TruthPoint]
     traces: list  # TraceRow copies: (node_id, detection_id, segment_index, final)
     requests: list  # TraceRequestRow copies: (node_id, detection_id, close_reason)
+    impulse_events: list[ImpulseEvent]
+    impulse_truth: list[ImpulseTruth]
 
 
 @pytest.fixture
@@ -69,8 +72,7 @@ def run_scenario(tmp_path):
                         responder.service(next_tick)
                     next_tick += timedelta(seconds=1)
                 clock.set(msg.at)
-                path = "/v1/observations" if msg.kind == "observation" else "/v1/heartbeats"
-                r = c.post(path, content=msg.payload.model_dump_json(),
+                r = c.post(PATHS[msg.kind], content=msg.payload.model_dump_json(),
                            headers={"content-type": "application/json"})
                 assert r.status_code == 200, r.text
             while next_tick <= run.end_at + timedelta(seconds=60):
@@ -84,6 +86,9 @@ def run_scenario(tmp_path):
                           for t in session.scalars(select(TraceRow))]
                 requests = [(q.node_id, q.detection_id, q.close_reason)
                             for q in session.scalars(select(TraceRequestRow))]
-        return ScenarioResult(run, updates, run.truth(), traces, requests)
+            impulse_events = [ImpulseEvent.model_validate(e)
+                              for e in c.get("/v1/impulse-events").json()]
+        return ScenarioResult(run, updates, run.truth(), traces, requests, impulse_events,
+                              run.impulse_truth())
 
     return _run

@@ -1,0 +1,16 @@
+# A standalone acoustic impulse (a firework), far from any drone: the impulse should be
+# located but never attributed to a drone track (spec §7).
+name: firework
+seed: 12
+duration_s: 60
+nodes:
+  - {id: s01, lat: 60.1670, lon: 24.9180, time_quality: gps}
+  - {id: s02, lat: 60.1670, lon: 24.9310, time_quality: gps}
+  - {id: s03, lat: 60.1670, lon: 24.9440, time_quality: gps}
+  - {id: s04, lat: 60.1670, lon: 24.9530, time_quality: gps}
+  - {id: s05, lat: 60.1750, lon: 24.9180, time_quality: ntp}
+  - {id: s06, lat: 60.1750, lon: 24.9310, time_quality: ntp}
+  - {id: s07, lat: 60.1750, lon: 24.9440, time_quality: ntp}
+  - {id: s08, lat: 60.1750, lon: 24.9530, time_quality: ntp}
+impulses:
+  - {lat: 60.1740, lon: 24.9200, at_s: 20, source_db: 140, label: firework}

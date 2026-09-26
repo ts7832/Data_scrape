@@ -18,6 +18,8 @@ from kuulo_protocol.traces import TraceRequest, TraceUnavailable
 from .engine import SimulationRun
 
 TRACE_POLL_S = 10.0
+PATHS = {"observation": "/v1/observations", "heartbeat": "/v1/heartbeats",
+         "impulse": "/v1/impulses"}
 
 log = logging.getLogger("kuulo.sim")
 
@@ -89,6 +91,12 @@ def write_truth(run: SimulationRun, path: Path) -> None:
         for p in run.truth()
     ]
     path.write_text(json.dumps(rows, indent=1))
+    impulse_rows = [
+        {"label": p.label, "at": p.at.isoformat(), "lat": p.position.lat, "lon": p.position.lon}
+        for p in run.impulse_truth()
+    ]
+    path.with_name(f"{path.stem}_impulses{path.suffix}").write_text(
+        json.dumps(impulse_rows, indent=1))
 
 
 def run_realtime(
@@ -113,7 +121,7 @@ def run_realtime(
         if msg.at >= next_poll:
             stats.trace_segments += responder.service(msg.at)
             next_poll = msg.at + timedelta(seconds=TRACE_POLL_S)
-        path = "/v1/observations" if msg.kind == "observation" else "/v1/heartbeats"
+        path = PATHS[msg.kind]
         headers = {"content-type": "application/json"}
         response = client.post(path, content=msg.payload.model_dump_json(), headers=headers)
         if response.status_code >= 400:

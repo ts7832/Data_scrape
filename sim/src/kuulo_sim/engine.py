@@ -13,6 +13,7 @@ import numpy as np
 
 from kuulo_protocol.features import BAND_EDGES_HZ, FRAME_PERIOD_MS
 from kuulo_protocol.geo import distance_m
+from kuulo_protocol.impulses import ImpulseFeatures, ImpulseReport, speed_of_sound
 from kuulo_protocol.models import (
     Acoustic,
     Detection,
@@ -39,27 +40,35 @@ from .physics import (
     propagation_delay_s,
     received_level_db,
 )
-from .scenario import Scenario, drone_position, node_offline
-from .traces import synth_frames
+from .scenario import Scenario, drone_position, node_offline, route_end_point, route_end_s
+from .traces import DB_SPL_TO_DBFS, synth_frames
 
 SOFTWARE_VERSION = "sim-0.1.0"
 FALSE_ALARM_SNR_DB = 20.0
 ROTOR_F0_HZ = 180.0
 FALSE_ALARM_F0_HZ = 110.0  # a two-stroke engine's firing frequency, no Doppler
 FRAMES_PER_S = 1000 // FRAME_PERIOD_MS
+IMPULSE_DETECT_SNR_DB = 20.0
 
 
 @dataclass(frozen=True)
 class SimMessage:
     at: datetime
-    kind: Literal["observation", "heartbeat"]
-    payload: Observation | Heartbeat
+    kind: Literal["observation", "heartbeat", "impulse"]
+    payload: Observation | Heartbeat | ImpulseReport
 
 
 @dataclass(frozen=True)
 class TruthPoint:
     at: datetime
     drone_id: str
+    position: GeoPoint
+
+
+@dataclass(frozen=True)
+class ImpulseTruth:
+    label: str
+    at: datetime
     position: GeoPoint
 
 
@@ -155,7 +164,7 @@ class SimulationRun:
             return UUID(int=rng.getrandbits(128), version=4)
 
         nodes = sorted(sc.nodes, key=lambda n: n.id)
-        offsets = {n.id: clock_offset_s(n.time_quality, rng) for n in nodes}
+        self._offsets = offsets = {n.id: clock_offset_s(n.time_quality, rng) for n in nodes}
         smoothers = {n.id: DetectionSmoother(id_factory=new_id) for n in nodes}
         last_heard: dict[str, _Heard] = {}
         heartbeat_every = max(1, round(sc.heartbeat_every_s / sc.tick_s))
@@ -221,8 +230,58 @@ class SimulationRun:
                 obs_signed = sign(obs, self.node_keys[node.id][0])
                 out.append(SimMessage(send_at, "observation", obs_signed))
 
+        out += self._impulse_messages()
         out.sort(key=lambda m: m.at)
         return out
+
+    def _impulse_sources(self) -> list[tuple[str, float, GeoPoint, float]]:
+        sc = self.scenario
+        out = [(i.label, i.at_s, GeoPoint(lat=i.lat, lon=i.lon), i.source_db) for i in sc.impulses]
+        for d in sc.drones:
+            if d.impact is not None:
+                end = (route_end_s(d), route_end_point(d), d.impact.source_db)
+                out.append((f"impact:{d.id}", *end))
+        return sorted(out, key=lambda s: s[1])
+
+    def _impulse_messages(self) -> list[SimMessage]:
+        sc = self.scenario
+        rng = random.Random(sc.seed ^ 0x1A1A5)
+        c = speed_of_sound(sc.air_temperature_c)
+        out = []
+        for _label, t, pos, source_db in self._impulse_sources():
+            for node in sorted(sc.nodes, key=lambda n: n.id):
+                if node_offline(sc, node.id, t):
+                    continue
+                r = distance_m(node, pos)
+                level = received_level_db(source_db, r)
+                snr = level - node.noise_floor_db
+                if snr < IMPULSE_DETECT_SNR_DB:
+                    continue
+                sigma = min(0.01, max(1 / 16_000, 0.0005 * 10 ** ((40 - snr) / 20)))
+                # Propagation, clock error and picking noise are real seconds: only the emission
+                # instant follows the scenario's time scale (Review Focus 1).
+                delay = (r / c + sc.nlos_delay_s.get(node.id, 0.0) + self._offsets[node.id]
+                         + rng.gauss(0, sigma))
+                onset = self._at(t) + timedelta(seconds=delay)
+                peak = min(0.0, level + DB_SPL_TO_DBFS)
+                report = ImpulseReport(
+                    source=Source(type=SourceType.SIMULATED_NODE, id=node.id), onset_at=onset,
+                    onset_sigma_s=sigma, time_quality=node.time_quality,
+                    sensor_location=SensorLocation(lat=node.lat, lon=node.lon, accuracy_m=10.0),
+                    features=ImpulseFeatures(
+                        peak_dbfs=round(peak, 2), snr_db=round(min(snr, 150.0), 2),
+                        rise_time_ms=1.0, duration_ms=150.0, clipped=level + DB_SPL_TO_DBFS >= 0,
+                        band_db=[round(peak - 15.0, 2)] * 32),
+                    report_id=UUID(int=rng.getrandbits(128), version=4),
+                )
+                signed = sign(report, self.node_keys[node.id][0])
+                out.append(SimMessage(onset + timedelta(seconds=1.0), "impulse", signed))
+        return out
+
+    def impulse_truth(self) -> list[ImpulseTruth]:
+        self.messages()
+        return [ImpulseTruth(label, self._at(t), pos)
+                for label, t, pos, _ in self._impulse_sources()]
 
     def _loudest(self, node, t: float) -> _Sound:
         sc = self.scenario

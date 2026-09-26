@@ -1,0 +1,25 @@
+# A drone flown into a target and detonates at the end of its route (spec §7). Half the
+# sensors are GPS-timed, half NTP; s06's sound path is blocked (a building), so it hears the
+# blast late. Public CoarseLocator only groups the reports; precise localization and drone
+# attribution need the private locator (see docs/superpowers/specs/2026-09-26-kuulo-impulse-events-design.md).
+name: impact_strike
+seed: 11
+duration_s: 120
+nlos_delay_s:
+  s06: 0.12
+nodes:
+  - {id: s01, lat: 60.1670, lon: 24.9180, time_quality: gps}
+  - {id: s02, lat: 60.1670, lon: 24.9310, time_quality: gps}
+  - {id: s03, lat: 60.1670, lon: 24.9440, time_quality: gps}
+  - {id: s04, lat: 60.1670, lon: 24.9530, time_quality: gps}
+  - {id: s05, lat: 60.1750, lon: 24.9180, time_quality: ntp}
+  - {id: s06, lat: 60.1750, lon: 24.9310, time_quality: ntp}
+  - {id: s07, lat: 60.1750, lon: 24.9440, time_quality: ntp}
+  - {id: s08, lat: 60.1750, lon: 24.9530, time_quality: ntp}
+drones:
+  - id: d1
+    speed_mps: 25
+    start_s: 5
+    waypoints: [[60.1712, 24.9050], [60.1712, 24.9352]]
+    impact:
+      source_db: 150

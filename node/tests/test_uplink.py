@@ -3,9 +3,10 @@ import pytest
 
 from kuulo_node.uplink import RegistrationConflict, Uplink
 from kuulo_protocol.models import Heartbeat, NodeRegistration, SensorLocation, TimeQuality
+from kuulo_protocol.signing import generate_keypair
 
 REG = NodeRegistration(
-    node_id="demo-laptop", public_key="cHVi",
+    node_id="demo-laptop", public_key=generate_keypair()[1],
     location=SensorLocation(lat=60.1694, lon=24.949, accuracy_m=50), time_quality=TimeQuality.NTP,
 )
 

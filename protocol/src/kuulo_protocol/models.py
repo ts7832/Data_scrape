@@ -6,12 +6,17 @@ import base64
 import binascii
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 SCHEMA_VERSION = "1.0"
+
+# Node ids become directory names on the server (feature traces) and on nodes, so they are
+# restricted to characters that are safe as a single path component: no "/", "\\" or "..".
+NODE_ID_PATTERN = r"^[^\W_][\w.-]{0,63}$"  # Unicode letters/digits (Finnish names are fine)
+NodeId = Annotated[str, Field(min_length=1, max_length=64, pattern=NODE_ID_PATTERN)]
 
 
 class SourceType(StrEnum):
@@ -67,7 +72,7 @@ class WireModel(BaseModel):
 
 class Source(WireModel):
     type: SourceType
-    id: str = Field(min_length=1, max_length=64)
+    id: NodeId
 
 
 class GeoPoint(WireModel):
@@ -122,7 +127,7 @@ class Heartbeat(WireModel):
     """A node saying it is alive, so silence can be told apart from failure."""
 
     schema_version: Literal["1.0"] = SCHEMA_VERSION
-    node_id: str = Field(min_length=1, max_length=64)
+    node_id: NodeId
     sent_at: datetime
     software_version: str
     mic_ok: bool
@@ -158,7 +163,7 @@ class Track(WireModel):
 
 
 class NodeRegistration(WireModel):
-    node_id: str = Field(min_length=1, max_length=64)
+    node_id: NodeId
     public_key: str = Field(min_length=1)
     location: SensorLocation
     time_quality: TimeQuality

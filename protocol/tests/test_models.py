@@ -84,3 +84,21 @@ def test_drone_labels():
 def test_heartbeat_factory():
     hb = make_heartbeat("n1", sent_at=T0)
     assert hb.node_id == "n1" and hb.mic_ok and hb.queue_depth == 0
+
+
+@pytest.mark.parametrize("bad", ["../x", "a/b", "..", ".", "a\\b", "n 1"])
+def test_node_ids_must_be_safe_as_path_components(bad):
+    from kuulo_protocol.models import NodeRegistration, SensorLocation, TimeQuality
+    from kuulo_protocol.signing import generate_keypair
+
+    with pytest.raises(ValueError):
+        NodeRegistration(node_id=bad, public_key=generate_keypair()[1],
+                         location=SensorLocation(lat=60, lon=25, accuracy_m=1),
+                         time_quality=TimeQuality.NTP)
+
+
+def test_simulated_and_demo_node_ids_stay_valid():
+    from kuulo_protocol.models import Source, SourceType
+
+    for ok in ("n01", "demo-laptop", "test-node", "node_7.a"):
+        assert Source(type=SourceType.ACOUSTIC_NODE, id=ok).id == ok

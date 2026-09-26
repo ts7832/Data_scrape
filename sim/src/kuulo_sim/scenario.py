@@ -11,7 +11,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from kuulo_protocol.geo import from_local, to_local
-from kuulo_protocol.models import GeoPoint, Label, TimeQuality
+from kuulo_protocol.models import GeoPoint, Label, NodeId, TimeQuality
 
 
 class _Spec(BaseModel):
@@ -19,7 +19,7 @@ class _Spec(BaseModel):
 
 
 class NodeSpec(_Spec):
-    id: str = Field(min_length=1, max_length=64)
+    id: NodeId
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
     time_quality: TimeQuality = TimeQuality.NTP

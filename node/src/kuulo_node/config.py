@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from kuulo_protocol.models import SensorLocation, TimeQuality
+from kuulo_protocol.models import NODE_ID_PATTERN, SensorLocation, TimeQuality
 from kuulo_protocol.smoothing import SmootherConfig
 
 
@@ -61,8 +62,9 @@ def load_config(path: Path) -> NodeConfig:
         return p if p.is_absolute() else (base / p).resolve()
 
     node_id = str(_require(raw, "node_id", ""))
-    if not 1 <= len(node_id) <= 64:
-        raise ConfigError("node_id must be 1-64 characters")
+    if not re.fullmatch(NODE_ID_PATTERN, node_id):
+        raise ConfigError("node_id must be 1-64 letters, digits, '.', '_' or '-', "
+                          "starting with a letter or digit (no spaces or slashes)")
     server_url = str(_require(raw, "server_url", ""))
     loc = _require(raw, "location", "")
     location = SensorLocation(

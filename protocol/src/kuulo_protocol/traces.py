@@ -15,7 +15,7 @@ import numpy as np
 from pydantic import Field, field_validator
 
 from .features import FRAME_PERIOD_MS, N_BANDS
-from .models import SCHEMA_VERSION, TimeQuality, WireModel, to_utc_ms
+from .models import SCHEMA_VERSION, NodeId, TimeQuality, WireModel, to_utc_ms
 
 MAX_FRAMES = 3000  # 60 s at 20 ms
 SEGMENT_FRAMES = MAX_FRAMES
@@ -29,7 +29,7 @@ class FeatureTraceHeader(WireModel):
 
     schema_version: Literal["1.0"] = SCHEMA_VERSION
     trace_id: UUID = Field(default_factory=uuid4)
-    node_id: str = Field(min_length=1, max_length=64)
+    node_id: NodeId
     detection_id: UUID
     segment_index: int = Field(ge=0, le=100_000)
     final: bool
@@ -60,7 +60,7 @@ class TraceUnavailable(WireModel):
     """A node's signed answer that it no longer holds a requested detection's segments."""
 
     schema_version: Literal["1.0"] = SCHEMA_VERSION
-    node_id: str = Field(min_length=1, max_length=64)
+    node_id: NodeId
     detection_id: UUID
     sent_at: datetime
     signature: str = ""

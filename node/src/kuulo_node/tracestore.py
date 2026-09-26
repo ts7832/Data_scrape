@@ -62,15 +62,16 @@ class SegmentInfo:
 class _Segment:
     """Frames of the segment being recorded, held in memory until it closes."""
 
-    def __init__(self, detection_id: UUID, index: int) -> None:
+    def __init__(self, detection_id: UUID, index: int, anchor: datetime) -> None:
         self.detection_id = detection_id
         self.index = index
-        self.walls: list[datetime] = []
+        self.anchor = anchor  # wall-clock time of audio time 0 for this detection
+        self.walls: list[float] = []  # audio times, seconds
         self.bands: list[np.ndarray] = []
         self.rms: list[float] = []
         self.peak: list[float] = []
 
-    def add(self, wall: datetime, band: np.ndarray, rms: float, peak: float) -> None:
+    def add(self, wall: float, band: np.ndarray, rms: float, peak: float) -> None:
         self.walls.append(wall)
         self.bands.append(band)
         self.rms.append(rms)
@@ -99,10 +100,12 @@ class TraceStore:
         self._time_quality = TimeQuality(time_quality)
         self.budget_bytes = budget_bytes
         self._now = now
-        self._pre_roll: deque[tuple[datetime, np.ndarray, float, float]] = deque(
+        self._pre_roll: deque[tuple[float, np.ndarray, float, float]] = deque(
             maxlen=round(pre_roll_s / FRAME_S)
         )
         self._leftover = np.zeros(0, np.float32)
+        self._leftover_t = 0.0
+        self._anchor: datetime | None = None
         self._open: _Segment | None = None
         self._db = sqlite3.connect(str(self.root / "index.db"), isolation_level=None)
         self._db.executescript(
@@ -123,19 +126,31 @@ class TraceStore:
         return self._open.detection_id if self._open is not None else None
 
     def feed(self, samples: np.ndarray, t_audio: float, detection_id: UUID | None) -> None:
-        """Add 16 kHz mono audio (first sample at audio time t_audio) under a detection."""
-        del t_audio  # frames are placed on the wall clock relative to "now" = end of this block
-        x = np.concatenate([self._leftover, np.asarray(samples, np.float32)])
+        """Add 16 kHz mono audio (first sample at audio time t_audio) under a detection.
+
+        Frames are timed by audio time, never by when a block happens to be processed: a mic
+        queue draining after a slow upload hands over many blocks at one instant. The wall-clock
+        anchor (wall time of audio time 0) follows the clock while idle and is frozen for the
+        length of a detection, so a segment's frame offsets always increase.
+        """
+        samples = np.asarray(samples, np.float32)
+        expected = self._leftover_t + self._leftover.size / SAMPLE_RATE
+        if self._leftover.size == 0 or abs(t_audio - expected) > FRAME_S:
+            self._leftover, self._leftover_t = np.zeros(0, np.float32), t_audio  # gap/restart
+        x = np.concatenate([self._leftover, samples])
+        start_t = self._leftover_t
         block = extract_frames(x)
         used = block.frames * FRAME_SAMPLES
-        self._leftover = x[used:]
-        wall_end = self._now() - timedelta(seconds=self._leftover.size / SAMPLE_RATE)
+        self._leftover, self._leftover_t = x[used:], start_t + used / SAMPLE_RATE
+        if self._open is None or self._anchor is None:
+            audio_end = t_audio + samples.size / SAMPLE_RATE
+            self._anchor = self._now() - timedelta(seconds=audio_end)
 
         if self._open is not None and self._open.detection_id != detection_id:
             self._close(final=True)
         for i in range(block.frames):
-            wall = wall_end - timedelta(seconds=(block.frames - i) * FRAME_S)
-            frame = (wall, block.band_db[i], float(block.rms_db[i]), float(block.peak_freq_hz[i]))
+            t = start_t + i * FRAME_S
+            frame = (t, block.band_db[i], float(block.rms_db[i]), float(block.peak_freq_hz[i]))
             if detection_id is None:
                 self._pre_roll.append(frame)
                 continue
@@ -143,15 +158,14 @@ class TraceStore:
                 self._start(detection_id)
             self._open.add(*frame)
             if len(self._open) >= SEGMENT_FRAMES:
+                anchor = self._open.anchor
                 self._close(final=False)
-                self._open = _Segment(detection_id, self._next_index(detection_id))
-        if detection_id is None:
-            return
-        if self._open is None:  # the detection started on a block with no complete frame yet
-            self._start(detection_id)
+                self._open = _Segment(detection_id, self._next_index(detection_id), anchor)
+        if detection_id is not None and self._open is None:
+            self._start(detection_id)  # the detection began on a block with no complete frame
 
     def _start(self, detection_id: UUID) -> None:
-        self._open = _Segment(detection_id, self._next_index(detection_id))
+        self._open = _Segment(detection_id, self._next_index(detection_id), self._anchor)
         for frame in self._pre_roll:
             self._open.add(*frame)
         self._pre_roll.clear()
@@ -178,8 +192,8 @@ class TraceStore:
                 )
                 self._rewrite_final(seg.detection_id, seg.index - 1)
             return
-        start = seg.walls[0]
-        offsets = np.array([round((w - start).total_seconds() * 1000) for w in seg.walls])
+        start = seg.anchor + timedelta(seconds=seg.walls[0])
+        offsets = np.round((np.array(seg.walls) - seg.walls[0]) * 1000).astype(np.int64)
         body = encode_body(
             t_offset_ms=offsets, band_db=np.stack(seg.bands).reshape(-1, N_BANDS),
             rms_db=np.array(seg.rms), peak_freq_hz=np.array(seg.peak),

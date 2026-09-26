@@ -41,7 +41,7 @@ def env(tmp_path):
                                  now=clock, monotonic=mono, **kw)
 
         yield {"client": client, "app": app, "me": me, "other": other, "store": store,
-               "clock": clock, "mono": mono, "uploader": uploader}
+               "clock": clock, "mono": mono, "uploader": uploader, "audio_t": 0.0}
 
 
 def record(env, seconds, detection_id=None, *, finish=True):
@@ -50,10 +50,12 @@ def record(env, seconds, detection_id=None, *, finish=True):
     rng = np.random.default_rng(0)
     for _ in range(int(seconds * 2)):
         env["clock"].advance(0.5)
-        env["store"].feed((rng.standard_normal(n) * 0.05).astype(np.float32), 0.0, d)
+        env["store"].feed((rng.standard_normal(n) * 0.05).astype(np.float32), env["audio_t"], d)
+        env["audio_t"] += 0.5
     if finish:
         env["clock"].advance(0.5)
-        env["store"].feed(np.zeros(n, np.float32), 0.0, None)
+        env["store"].feed(np.zeros(n, np.float32), env["audio_t"], None)
+        env["audio_t"] += 0.5
     return d
 
 

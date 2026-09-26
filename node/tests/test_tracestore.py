@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import numpy as np
+import pytest
 
 from kuulo_node.tracestore import TraceStore
 from kuulo_protocol.features import SAMPLE_RATE
@@ -164,3 +165,17 @@ def test_detection_ending_exactly_on_a_segment_boundary_marks_it_final(tmp_path)
     [seg] = store.segments(d)
     header = FeatureTraceHeader.model_validate_json(seg.header_path.read_text())
     assert seg.final and header.final and verify(header, pub)
+
+
+def test_bursty_delivery_keeps_frame_offsets_increasing(tmp_path):
+    # A mic queue draining after a slow upload (or a fast wav replay) hands over many blocks
+    # at one wall-clock instant. Frame times must follow audio time, not processing time.
+    clock = Clock()
+    store, _ = make_store(tmp_path, clock=clock)
+    d = uuid4()
+    t = play(store, 20, d)  # clock never advances: every block arrives "at once"
+    play(store, 1, None, start_t=t)
+    [seg] = store.segments(d)
+    header = FeatureTraceHeader.model_validate_json(seg.header_path.read_text())
+    body = decode_body(seg.body_path.read_bytes(), header.frame_count)
+    assert body["t_offset_ms"][-1] == pytest.approx(20_000 - 20, abs=20)

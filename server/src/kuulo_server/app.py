@@ -15,6 +15,7 @@ from fastapi import (
     Form,
     HTTPException,
     Request,
+    Response,
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
@@ -42,6 +43,8 @@ from .db import NodeRow, as_utc, make_session_factory
 from .fusion.context import DbFusionContext
 from .fusion.loader import load_engine, load_plugin
 from .impact.base import LocatorConfig
+from .impact.cap import STATUSES as CAP_STATUSES
+from .impact.cap import to_cap_xml
 from .impact.context import DbImpulseContext
 from .impulses import impulse_event_detail, persist_impulse_event, recent_impulse_events
 from .ingest import IngestError, ingest_heartbeat, ingest_impulse, ingest_observation, register_node
@@ -62,6 +65,8 @@ OBSERVATION = TypeAdapter(Observation)
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
+    if settings.cap_status not in CAP_STATUSES:
+        raise ValueError(f"cap_status must be one of {CAP_STATUSES}, got {settings.cap_status!r}")
     sessions = make_session_factory(settings.db_path)
     hub = LiveHub()
     last_status: dict[str, NodeStatus] = {}
@@ -222,6 +227,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if detail is None:
             raise HTTPException(status_code=404, detail="unknown impulse event")
         return detail
+
+    @app.get("/v1/impulse-events/{event_id}/cap")
+    async def get_impulse_event_cap(event_id: str) -> Response:
+        with sessions() as session:
+            detail = impulse_event_detail(session, event_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="unknown impulse event")
+        body = to_cap_xml(detail.event, sender=settings.cap_sender, status=settings.cap_status)
+        return Response(content=body, media_type="application/cap+xml")
 
     @app.post("/v1/heartbeats")
     async def post_heartbeat(hb: Heartbeat) -> dict:

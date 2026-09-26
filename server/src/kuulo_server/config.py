@@ -35,6 +35,8 @@ class Settings:
     max_trace_bytes: int = 4 * 1024 * 1024
     impulse_locator: str = "kuulo_server.impact.coarse:CoarseLocator"
     air_temperature_c: float = 10.0
+    cap_status: str = "Test"
+    cap_sender: str = "kuulo@localhost"
 
     def __post_init__(self) -> None:
         if self.traces_dir is None:

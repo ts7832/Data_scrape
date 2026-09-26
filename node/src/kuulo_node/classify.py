@@ -133,3 +133,41 @@ class YamnetEmbedder:
         self._interp.invoke()
         scores = self._interp.get_tensor(self._out_index).reshape(-1).astype(np.float32)
         return YamnetOutput(self._dequantised(self._emb).reshape(-1), scores)
+
+
+def rescale_to_half(p: float, threshold: float) -> float:
+    """Monotonic piecewise-linear map sending the head's chosen threshold to 0.5.
+
+    The node's smoother fires at 0.5 and auto-push looks for 0.8, so the trained head's own
+    operating point (picked on validation data) is moved to where those rules expect it.
+    """
+    p = min(1.0, max(0.0, p))
+    if p < threshold:
+        return 0.5 * p / threshold
+    return 0.5 + 0.5 * (p - threshold) / (1 - threshold)
+
+
+class HeadClassifier:
+    """Step B: frozen YAMNet embedding -> trained ONNX head. One YAMNet pass per window.
+
+    Returns {"drone": p} (rescaled so the head's threshold sits at 0.5) plus YAMNet's own class
+    scores, so --print-scores still shows what the audio sounds like.
+    """
+
+    def __init__(self, embedder, head_path: Path) -> None:
+        import json
+
+        import onnxruntime as ort
+
+        self._embedder = embedder
+        self._session = ort.InferenceSession(str(head_path), providers=["CPUExecutionProvider"])
+        meta_path = Path(head_path).with_suffix(".json")
+        meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+        self.threshold = float(meta.get("threshold", 0.5))
+
+    def score(self, window: np.ndarray) -> dict[str, float]:
+        out = self._embedder.run(window)
+        probs = self._session.run(None, {"embedding": out.embedding.reshape(1, -1)})[1]
+        scores = dict(zip(self._embedder.names, (float(v) for v in out.scores), strict=True))
+        scores["drone"] = rescale_to_half(float(probs[0, 1]), self.threshold)
+        return scores

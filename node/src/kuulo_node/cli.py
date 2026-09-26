@@ -10,7 +10,7 @@ from pathlib import Path
 import httpx
 
 from .audio import mic_source, wav_source
-from .config import ConfigError, load_config
+from .config import ConfigError, NodeConfig, load_config
 from .keys import load_or_create_keys
 from .outbox import Outbox
 from .runner import NodeRunner
@@ -19,6 +19,19 @@ from .traceupload import TraceUploader
 from .uplink import RegistrationConflict, Uplink
 
 log = logging.getLogger("kuulo.node")
+
+
+def build_classifier(cfg: NodeConfig):
+    """Step A (YAMNet class scores) or Step B (trained head on YAMNet embeddings)."""
+    from .classify import HeadClassifier, YamnetClassifier, YamnetEmbedder
+
+    if cfg.classifier == "head":
+        if cfg.head_path is None or not cfg.head_path.exists():
+            raise ValueError(f"trained head not found at {cfg.head_path}. Run `make ml` "
+                             "(or `make train` after `make datasets embed`), or set "
+                             'classifier = "yamnet".')
+        return HeadClassifier(YamnetEmbedder(cfg.model_path, cfg.class_map_path), cfg.head_path)
+    return YamnetClassifier(cfg.model_path, cfg.class_map_path, cfg.weights)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -40,10 +53,8 @@ def main(argv: list[str] | None = None) -> int:
     if not cfg.model_path.exists() or not cfg.class_map_path.exists():
         log.error("YAMNet model not found at %s. Run `make model` first.", cfg.model_path)
         return 2
-    from .classify import YamnetClassifier
-
     try:
-        classifier = YamnetClassifier(cfg.model_path, cfg.class_map_path, cfg.weights)
+        classifier = build_classifier(cfg)
     except ValueError as exc:
         log.error("%s", exc)
         return 2

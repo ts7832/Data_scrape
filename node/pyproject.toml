@@ -10,6 +10,7 @@ dependencies = [
     "soundfile>=0.12",
     "sounddevice>=0.5",
     "ai-edge-litert>=1.2",
+    "onnxruntime>=1.19",
 ]
 
 [project.scripts]

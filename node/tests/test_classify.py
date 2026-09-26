@@ -55,3 +55,38 @@ def test_embedder_returns_embedding_that_reproduces_yamnet_scores():
     assert out.scores.shape == (521,) and len(emb.names) == 521
     logits = emb.head_weights @ out.embedding + emb.head_bias
     assert np.max(np.abs(1 / (1 + np.exp(-logits)) - out.scores)) < 0.06
+
+
+def test_head_probability_is_rescaled_so_its_threshold_maps_to_half():
+    from kuulo_node.classify import rescale_to_half
+
+    assert rescale_to_half(0.2, threshold=0.2) == pytest.approx(0.5)
+    assert rescale_to_half(0.0, threshold=0.2) == 0.0 and rescale_to_half(1.0, threshold=0.2) == 1.0
+    assert rescale_to_half(0.1, threshold=0.2) == pytest.approx(0.25)
+    assert rescale_to_half(0.6, threshold=0.2) == pytest.approx(0.75)
+
+
+def test_build_classifier_explains_a_missing_head(tmp_path):
+    from dataclasses import replace
+
+    from kuulo_node.cli import build_classifier
+    from kuulo_node.testing import make_test_config
+
+    cfg = replace(make_test_config(tmp_path), model_path=MODELS / "yamnet.tflite",
+                  class_map_path=MODELS / "yamnet_class_map.csv", classifier="head",
+                  head_path=tmp_path / "nope.onnx", weights={"drone": 1.0})
+    with pytest.raises(ValueError, match="make train"):
+        build_classifier(cfg)
+
+
+@pytest.mark.skipif(not (MODELS / "yamnet.tflite").exists(), reason="model not downloaded")
+def test_build_classifier_yamnet_by_default(tmp_path):
+    from dataclasses import replace
+
+    from kuulo_node.classify import YamnetClassifier
+    from kuulo_node.cli import build_classifier
+    from kuulo_node.testing import make_test_config
+
+    cfg = replace(make_test_config(tmp_path), model_path=MODELS / "yamnet.tflite",
+                  class_map_path=MODELS / "yamnet_class_map.csv")
+    assert isinstance(build_classifier(cfg), YamnetClassifier)

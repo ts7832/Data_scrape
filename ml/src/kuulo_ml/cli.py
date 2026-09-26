@@ -57,14 +57,72 @@ def cmd_embed(args) -> int:
     return 0
 
 
+def _load(split: str) -> dict:
+    path = FEATURES / f"features_{split}.npz"
+    if not path.exists():
+        raise SystemExit(f"{path} not found: run `make embed` first")
+    with np.load(path, allow_pickle=False) as data:
+        return {k: data[k] for k in data.files}
+
+
+def _clean(features: dict) -> dict:
+    keep = ~features["augmented"]
+    return {k: v[keep] for k, v in features.items()}
+
+
+def cmd_train(args) -> int:
+    from .train import export_onnx, train_head
+
+    train, val = _load("train"), _clean(_load("val"))
+    print(f"train {len(train['label'])} windows ({int(train['label'].sum())} drone), "
+          f"val {len(val['label'])} ({int(val['label'].sum())} drone)")
+    head = train_head(train, val, seed=args.seed, log=print)
+    export_onnx(head, MODELS / "drone_head.onnx")
+    print(f"chose {head.detail}: val AP {head.val_ap:.3f}, threshold {head.threshold:.3f} -> "
+          f"{MODELS / 'drone_head.onnx'}")
+    return 0
+
+
+def cmd_evaluate(_args) -> int:
+    import json
+
+    from .evaluate import evaluate_method, results_markdown
+    from .train import best_f1_threshold, onnx_probabilities
+
+    test, val = _clean(_load("test")), _clean(_load("val"))
+    head_path = MODELS / "drone_head.onnx"
+    meta = json.loads(head_path.with_suffix(".json").read_text())
+    tuned_a, _ = best_f1_threshold(val["label"], val["step_a"])
+    step_b = onnx_probabilities(head_path, test["embedding"])
+    results = {
+        "Step A (YAMNet, node default 0.5)": evaluate_method(
+            test["step_a"], test["label"], test["kind"], 0.5),
+        "Step A (threshold tuned on val)": evaluate_method(
+            test["step_a"], test["label"], test["kind"], tuned_a),
+        f"Step B ({meta['model']})": evaluate_method(
+            step_b, test["label"], test["kind"], meta["threshold"]),
+    }
+    text = results_markdown(results, windows=len(test["label"]),
+                            drone_windows=int(test["label"].sum()))
+    (REPO / "ml" / "RESULTS.md").write_text(text)
+    (FEATURES / "results.json").write_text(json.dumps(results, indent=2))
+    print(text)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kuulo-ml")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("datasets", help="download DroneNoise and ESC-50 into data/datasets/")
     embed = sub.add_parser("embed", help="YAMNet embeddings + Step A scores per window")
     embed.add_argument("--seed", type=int, default=0)
+    train = sub.add_parser("train", help="fit the Step B head and export ONNX")
+    train.add_argument("--seed", type=int, default=0)
+    sub.add_parser("evaluate", help="Step A vs Step B on the held-out test set -> ml/RESULTS.md")
     args = parser.parse_args(argv)
-    return {"datasets": cmd_datasets, "embed": cmd_embed}[args.cmd](args)
+    commands = {"datasets": cmd_datasets, "embed": cmd_embed, "train": cmd_train,
+                "evaluate": cmd_evaluate}
+    return commands[args.cmd](args)
 
 
 if __name__ == "__main__":

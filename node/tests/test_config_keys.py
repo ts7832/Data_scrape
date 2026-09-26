@@ -71,3 +71,32 @@ def test_trace_sample_rate_must_be_a_probability(tmp_path):
     path.write_text(EXAMPLE.read_text() + "\n[traces]\nsample_rate = 2.0\n")
     with pytest.raises(ConfigError, match="sample_rate"):
         load_config(path)
+
+
+def _config_with(tmp_path, extra: str, drop_weights: bool = False) -> Path:
+    text = EXAMPLE.read_text()
+    if drop_weights:
+        text = text[: text.index("[weights]")]
+    lines = [ln for ln in text.splitlines() if not ln.startswith(("classifier", "head_path"))]
+    path = tmp_path / "c.toml"
+    path.write_text(extra + "\n" + "\n".join(lines))
+    return path
+
+
+def test_head_classifier_needs_no_yamnet_weights(tmp_path):
+    path = _config_with(tmp_path, 'classifier = "head"\nhead_path = "m/head.onnx"',
+                        drop_weights=True)
+    cfg = load_config(path)
+    assert cfg.classifier == "head" and cfg.weights == {"drone": 1.0}
+    assert cfg.head_path == (tmp_path / "m/head.onnx").resolve()
+
+
+def test_yamnet_classifier_still_requires_weights(tmp_path):
+    path = _config_with(tmp_path, 'classifier = "yamnet"', drop_weights=True)
+    with pytest.raises(ConfigError, match="weights"):
+        load_config(path)
+
+
+def test_unknown_classifier_is_rejected(tmp_path):
+    with pytest.raises(ConfigError, match="classifier"):
+        load_config(_config_with(tmp_path, 'classifier = "magic"'))

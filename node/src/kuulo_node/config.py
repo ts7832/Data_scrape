@@ -14,6 +14,9 @@ class ConfigError(ValueError):
     pass
 
 
+CLASSIFIERS = ("yamnet", "head")
+
+
 @dataclass(frozen=True)
 class TraceConfig:
     enabled: bool = True
@@ -35,6 +38,8 @@ class NodeConfig:
     weights: dict[str, float]
     state_dir: Path  # outbox and feature traces; never inside the repository's tracked files
     traces: TraceConfig = TraceConfig()
+    classifier: str = "yamnet"  # "yamnet" (Step A) or "head" (Step B)
+    head_path: Path | None = None
 
 
 def _require(table: dict, key: str, where: str):
@@ -74,6 +79,12 @@ def load_config(path: Path) -> NodeConfig:
         end_after_s=float(det.get("end_after_s", defaults.end_after_s)),
         update_every_s=float(det.get("update_every_s", defaults.update_every_s)),
     )
+    classifier = str(raw.get("classifier", "yamnet"))
+    if classifier not in CLASSIFIERS:
+        raise ConfigError(f"classifier must be one of {CLASSIFIERS}, got {classifier!r}")
+    head_path = rel(raw["head_path"]) if "head_path" in raw else None
+    if classifier == "head" and "weights" not in raw:
+        raw["weights"] = {"drone": 1.0}  # the head outputs a single drone probability
     weights = {str(k): float(v) for k, v in _require(raw, "weights", "").items()}
     if not weights:
         raise ConfigError("[weights] must name at least one class")
@@ -104,4 +115,6 @@ def load_config(path: Path) -> NodeConfig:
         weights=weights,
         state_dir=state_dir,
         traces=traces,
+        classifier=classifier,
+        head_path=head_path,
     )

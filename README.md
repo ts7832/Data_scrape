@@ -126,6 +126,17 @@ server; 12 held-out chainsaw and helicopter clips gave no detection.
   so it can be later.
 - Localhost only, no authentication. Do not expose the server to the internet.
 
+## Roadmap
+
+- **Impact/detonation localization.** Beyond tracking a drone in flight, estimate *where it hit*
+  (a warhead detonation or a hard crash) using TDOA multilateration on the sharp acoustic
+  transient a bang makes — a different, much more precise technique than the coarse weighted-
+  centroid tracking used for a rotor's continuous hum, and a natural first use of the private
+  fusion engine's already-reserved TDOA slot (see §2 of the milestone 1 design spec). Useful for
+  cueing emergency responders to a location, and for relaying to counter-UAS operators. Not
+  scheduled; full design sketch in
+  [`docs/superpowers/specs/2026-09-26-kuulo-impact-localization-roadmap.md`](docs/superpowers/specs/2026-09-26-kuulo-impact-localization-roadmap.md).
+
 ## Privacy
 
 Raw audio exists only in the node's memory and is never written to disk or uploaded, unless you

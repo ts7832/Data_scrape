@@ -35,6 +35,13 @@ def test_helsinki_pass_confirmed_and_located(run_scenario):
     assert error < LOCATION_ERROR_BOUND_M
 
 
+def test_helsinki_pass_reports_a_plausible_speed(run_scenario):
+    result = run_scenario("helsinki_pass")  # drone flies at 20 m/s
+    speeds = [u.velocity.speed_mps for u in result.updates
+              if u.status is TrackStatus.CONFIRMED and u.velocity is not None]
+    assert speeds and 5 < sorted(speeds)[len(speeds) // 2] < 60
+
+
 def test_false_alarm_never_confirmed(run_scenario):
     result = run_scenario("false_alarm")
     assert TrackStatus.CONFIRMED not in statuses(result)

@@ -113,6 +113,16 @@ def test_far_apart_groups_make_separate_tracks():
     assert ta.track.track_id != tb.track.track_id
 
 
+def test_speed_is_not_computed_from_observations_milliseconds_apart():
+    ctx, fusion = Ctx(), BasicFusion()
+    ctx.add_node("n1", at(0, 0))
+    ctx.add_node("n2", at(900, 0))
+    observe(ctx, fusion, "n1", T0, snr=20)
+    [update] = observe(ctx, fusion, "n2", T0 + timedelta(milliseconds=40), snr=5)
+    v = update.track.velocity
+    assert v is None or v.speed_mps < 100  # today: thousands of m/s
+
+
 def test_tick_closes_quiet_tracks():
     ctx, fusion = Ctx(), BasicFusion()
     ctx.add_node("n1", at(0, 0))

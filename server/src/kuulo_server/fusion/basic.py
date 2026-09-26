@@ -38,6 +38,7 @@ class FusionConfig:
     expected_hearing_m: float = 500.0
     silent_penalty: float = 0.7
     smoothing_alpha: float = 0.5
+    velocity_min_dt_s: float = 3.0
 
 
 def _weight(obs: Observation) -> float:
@@ -49,6 +50,12 @@ class BasicFusion:
     def __init__(self, config: FusionConfig | None = None):
         self.config = config or FusionConfig()
         self.tracks: dict[str, Track] = {}
+        # Speed is only meaningful over a real baseline: observations from different nodes can
+        # arrive milliseconds apart, and their weighted centroids differ by hundreds of metres,
+        # which divided by milliseconds gives speeds in the thousands of m/s. Each track keeps a
+        # (position, time) anchor and only recomputes velocity once >= velocity_min_dt_s has
+        # passed since it, then moves the anchor.
+        self._anchor: dict[str, tuple[GeoPoint, datetime]] = {}
 
     def on_observation(self, obs: Observation, ctx: FusionContext) -> list[TrackUpdate]:
         cfg = self.config
@@ -103,6 +110,7 @@ class BasicFusion:
                 observation_ids=[o.observation_id for o in group],
                 silent_neighbour_ids=silent,
             )
+            self._anchor[str(track.track_id)] = (centroid, obs.observed_at)
         else:
             track = self._update(existing, centroid, status, label, confidence, uncertainty, group,
                                  silent, obs.observed_at)
@@ -115,6 +123,7 @@ class BasicFusion:
             if (now - track.last_seen).total_seconds() > self.config.close_after_s:
                 closed = track.model_copy(update={"status": TrackStatus.CLOSED})
                 del self.tracks[key]
+                self._anchor.pop(key, None)
                 updates.append(TrackUpdate(closed))
         return updates
 
@@ -144,13 +153,16 @@ class BasicFusion:
         a = self.config.smoothing_alpha
         dx, dy = to_local(old.position, centroid)
         position = from_local(old.position, a * dx, a * dy)
-        dt = (at - old.last_seen).total_seconds()
+        key = str(old.track_id)
+        anchor_pos, anchor_at = self._anchor.get(key, (old.position, old.last_seen))
+        dt = (at - anchor_at).total_seconds()
         velocity = old.velocity
-        if dt > 0:
-            mx, my = to_local(old.position, position)
+        if dt >= self.config.velocity_min_dt_s:
+            mx, my = to_local(anchor_pos, position)
             velocity = Velocity(
                 speed_mps=hypot(mx, my) / dt, heading_deg=degrees(atan2(mx, my)) % 360
             )
+            self._anchor[key] = (position, at)
         if old.status is TrackStatus.CONFIRMED and status is not TrackStatus.CONFIRMED:
             status, silent = TrackStatus.CONFIRMED, []  # a confirmed track stays confirmed
             confidence = max(confidence, old.confidence)

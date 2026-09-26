@@ -64,32 +64,96 @@ export type SchemaVersion1 = "1.0";
 export type SentAt = string;
 export type Signature1 = string;
 export type SoftwareVersion = string;
+export type Lat = number;
+export type Lon = number;
+export type Alternatives = GeoPoint[];
+export type AssociatedTrackId = string | null;
+export type BearingDeg = number;
+export type Confidence = number;
+export type SemiMajorM = number;
+export type SemiMinorM = number;
+export type EventId = string;
+export type ExcludedNodeIds = string[];
+export type ImpulseKind = "drone_impact" | "unassociated";
+export type NodeIds = string[];
+export type OccurredAt = string;
+export type LocationQuality = "multilaterated" | "ambiguous" | "coarse";
+export type ReportIds = string[];
+export type RmsResidualMs = number | null;
+export type UpdatedAt = string;
+/**
+ * @minItems 32
+ * @maxItems 32
+ */
+export type BandDb = [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number
+];
+export type Clipped = boolean;
+export type DurationMs = number;
+export type PeakDbfs = number;
+export type RiseTimeMs = number;
+export type SnrDb = number;
+export type OnsetAt = string;
+export type OnsetSigmaS = number;
+export type ReportId = string;
+export type SchemaVersion2 = "1.0";
+export type AccuracyM = number;
+export type Lat1 = number;
+export type Lon1 = number;
+export type Signature2 = string;
+export type Id = string;
+export type SourceType =
+  "acoustic_node" | "simulated_node" | "citizen_report" | "remote_id" | "adsb" | "external_network";
+export type Reports = ImpulseReport[];
 export type Late = boolean;
 export type Status = "accepted" | "duplicate";
-export type Data = Observation | Track | NodeView | null;
+export type Data = Observation | Track | NodeView | ImpulseEvent | null;
 export type PeakFreqHz = number;
-export type SnrDb = number;
-export type BearingDeg = number | null;
-export type Confidence = number;
+export type SnrDb1 = number;
+export type BearingDeg1 = number | null;
+export type Confidence1 = number;
 export type Label = "drone_multirotor" | "drone_fixedwing_engine" | "aircraft" | "bird" | "unknown";
 export type DetectionId1 = string;
 export type Phase = "start" | "update" | "end";
 export type ObservationId = string;
 export type ObservedAt = string;
-export type SchemaVersion2 = "1.0";
-export type AccuracyM = number;
-export type Lat = number;
-export type Lon = number;
-export type Signature2 = string;
-export type Id = string;
-export type SourceType =
-  "acoustic_node" | "simulated_node" | "citizen_report" | "remote_id" | "adsb" | "external_network";
-export type Confidence1 = number;
+export type SchemaVersion3 = "1.0";
+export type Signature3 = string;
+export type Confidence2 = number;
 export type FirstSeen = string;
 export type LastSeen = string;
 export type ObservationIds = string[];
-export type Lat1 = number;
-export type Lon1 = number;
 export type SilentNeighbourIds = string[];
 export type TrackStatus = "tentative" | "confirmed" | "downgraded" | "closed";
 export type TrackId = string;
@@ -102,7 +166,7 @@ export type NodeId2 = string;
 export type SoftwareVersion1 = string | null;
 export type NodeStatus = "online" | "stale" | "offline";
 export type UncorroboratedRate24H = number | null;
-export type Type = "observation" | "track" | "node_status" | "resync";
+export type Type = "observation" | "track" | "node_status" | "impulse_event" | "resync";
 export type NodeId3 = string;
 export type PublicKey = string;
 export type CreatedAt = string;
@@ -111,9 +175,9 @@ export type NodeId4 = string;
 export type RequestId = string;
 export type DetectionId3 = string;
 export type NodeId5 = string;
-export type SchemaVersion3 = "1.0";
+export type SchemaVersion4 = "1.0";
 export type SentAt1 = string;
-export type Signature3 = string;
+export type Signature4 = string;
 export type Observations = Observation[];
 export type SilentNeighbours = NodeView[];
 export type TraceSegments = number;
@@ -121,6 +185,9 @@ export type TraceSegments = number;
 export interface KuuloSchema {
   FeatureTraceHeader?: FeatureTraceHeader;
   Heartbeat?: Heartbeat;
+  ImpulseEvent?: ImpulseEvent;
+  ImpulseEventDetail?: ImpulseEventDetail;
+  ImpulseReport?: ImpulseReport;
   IngestResult?: IngestResult;
   LiveEvent?: LiveEvent;
   NodeRegistration?: NodeRegistration;
@@ -162,6 +229,67 @@ export interface Heartbeat {
   signature?: Signature1;
   software_version: SoftwareVersion;
 }
+export interface ImpulseEvent {
+  alternatives?: Alternatives;
+  associated_track_id?: AssociatedTrackId;
+  ellipse: Ellipse;
+  event_id: EventId;
+  excluded_node_ids?: ExcludedNodeIds;
+  kind: ImpulseKind;
+  node_ids: NodeIds;
+  occurred_at: OccurredAt;
+  position: GeoPoint;
+  quality: LocationQuality;
+  report_ids: ReportIds;
+  residuals_ms?: ResidualsMs;
+  rms_residual_ms?: RmsResidualMs;
+  updated_at: UpdatedAt;
+}
+export interface GeoPoint {
+  lat: Lat;
+  lon: Lon;
+}
+export interface Ellipse {
+  bearing_deg: BearingDeg;
+  confidence: Confidence;
+  semi_major_m: SemiMajorM;
+  semi_minor_m: SemiMinorM;
+}
+export interface ResidualsMs {
+  [k: string]: number;
+}
+export interface ImpulseEventDetail {
+  event: ImpulseEvent;
+  reports: Reports;
+}
+export interface ImpulseReport {
+  features: ImpulseFeatures;
+  onset_at: OnsetAt;
+  onset_sigma_s: OnsetSigmaS;
+  report_id?: ReportId;
+  schema_version?: SchemaVersion2;
+  sensor_location: SensorLocation;
+  signature?: Signature2;
+  source: Source;
+  time_quality: TimeQuality;
+}
+export interface ImpulseFeatures {
+  band_db: BandDb;
+  clipped: Clipped;
+  duration_ms: DurationMs;
+  peak_dbfs: PeakDbfs;
+  rise_time_ms: RiseTimeMs;
+  snr_db: SnrDb;
+}
+export interface SensorLocation {
+  accuracy_m: AccuracyM;
+  lat: Lat1;
+  lon: Lon1;
+}
+export interface Source {
+  id: Id;
+  type: SourceType;
+}
 export interface IngestResult {
   late?: Late;
   status: Status;
@@ -182,39 +310,30 @@ export interface Observation {
   event: EventRef;
   observation_id?: ObservationId;
   observed_at: ObservedAt;
-  schema_version?: SchemaVersion2;
+  schema_version?: SchemaVersion3;
   sensor_location: SensorLocation;
-  signature?: Signature2;
+  signature?: Signature3;
   source: Source;
   time_quality: TimeQuality;
 }
 export interface Acoustic {
   peak_freq_hz: PeakFreqHz;
-  snr_db: SnrDb;
+  snr_db: SnrDb1;
 }
 export interface Detection {
-  bearing_deg?: BearingDeg;
-  confidence: Confidence;
+  bearing_deg?: BearingDeg1;
+  confidence: Confidence1;
   label: Label;
 }
 export interface EventRef {
   detection_id: DetectionId1;
   phase: Phase;
 }
-export interface SensorLocation {
-  accuracy_m: AccuracyM;
-  lat: Lat;
-  lon: Lon;
-}
-export interface Source {
-  id: Id;
-  type: SourceType;
-}
 /**
  * The server's belief that a drone is at a place, with its evidence.
  */
 export interface Track {
-  confidence: Confidence1;
+  confidence: Confidence2;
   first_seen: FirstSeen;
   label: Label;
   last_seen: LastSeen;
@@ -225,10 +344,6 @@ export interface Track {
   track_id: TrackId;
   uncertainty_m: UncertaintyM;
   velocity?: Velocity | null;
-}
-export interface GeoPoint {
-  lat: Lat1;
-  lon: Lon1;
 }
 export interface Velocity {
   heading_deg: HeadingDeg;
@@ -265,9 +380,9 @@ export interface TraceRequest {
 export interface TraceUnavailable {
   detection_id: DetectionId3;
   node_id: NodeId5;
-  schema_version?: SchemaVersion3;
+  schema_version?: SchemaVersion4;
   sent_at: SentAt1;
-  signature?: Signature3;
+  signature?: Signature4;
 }
 export interface TrackDetail {
   observations: Observations;

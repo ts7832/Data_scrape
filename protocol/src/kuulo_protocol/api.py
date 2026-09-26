@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
+from .impulses import ImpulseEvent, ImpulseReport
 from .models import Observation, SensorLocation, TimeQuality, Track, WireModel
 
 
@@ -33,11 +34,16 @@ class TrackDetail(WireModel):
     trace_segments: int = 0
 
 
+class ImpulseEventDetail(WireModel):
+    event: ImpulseEvent
+    reports: list[ImpulseReport]
+
+
 class LiveEvent(WireModel):
     """One message on the /v1/live WebSocket. `resync` tells the client to reload its snapshot."""
 
-    type: Literal["observation", "track", "node_status", "resync"]
-    data: Observation | Track | NodeView | None = None
+    type: Literal["observation", "track", "node_status", "impulse_event", "resync"]
+    data: Observation | Track | NodeView | ImpulseEvent | None = None
 
 
 class IngestResult(WireModel):

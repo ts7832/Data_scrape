@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 import numpy as np
 
 from .features import BAND_EDGES_HZ, FRAME_PERIOD_MS, N_BANDS
+from .impulses import ImpulseFeatures, ImpulseReport
 from .models import (
     Acoustic,
     Detection,
@@ -83,3 +84,16 @@ def make_trace(
         band_edges_hz=list(BAND_EDGES_HZ), body_sha256=hashlib.sha256(body).hexdigest(),
     )
     return sign(header, private_key), body
+
+
+def make_impulse_report(
+    node_id: str, *, onset_at: datetime, lat: float, lon: float,
+    time_quality: TimeQuality = TimeQuality.GPS, sigma: float = 0.0005, peak_dbfs: float = -10.0,
+) -> ImpulseReport:
+    return ImpulseReport(
+        source=Source(type=SourceType.SIMULATED_NODE, id=node_id), onset_at=onset_at,
+        onset_sigma_s=sigma, time_quality=time_quality,
+        sensor_location=SensorLocation(lat=lat, lon=lon, accuracy_m=5.0),
+        features=ImpulseFeatures(peak_dbfs=peak_dbfs, snr_db=40.0, rise_time_ms=1.0,
+                                 duration_ms=150.0, clipped=False, band_db=[-40.0] * 32),
+    )

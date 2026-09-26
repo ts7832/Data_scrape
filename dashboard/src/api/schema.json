@@ -56,6 +56,43 @@
       "title": "Detection",
       "type": "object"
     },
+    "Ellipse": {
+      "additionalProperties": false,
+      "properties": {
+        "bearing_deg": {
+          "exclusiveMaximum": 180,
+          "minimum": 0,
+          "title": "Bearing Deg",
+          "type": "number"
+        },
+        "confidence": {
+          "exclusiveMaximum": 1,
+          "exclusiveMinimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "semi_major_m": {
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Semi Major M",
+          "type": "number"
+        },
+        "semi_minor_m": {
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Semi Minor M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "semi_major_m",
+        "semi_minor_m",
+        "bearing_deg",
+        "confidence"
+      ],
+      "title": "Ellipse",
+      "type": "object"
+    },
     "EventRef": {
       "additionalProperties": false,
       "properties": {
@@ -252,6 +289,250 @@
       "title": "Heartbeat",
       "type": "object"
     },
+    "ImpulseEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "alternatives": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/GeoPoint"
+          },
+          "title": "Alternatives",
+          "type": "array"
+        },
+        "associated_track_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Associated Track Id"
+        },
+        "ellipse": {
+          "$ref": "#/$defs/Ellipse"
+        },
+        "event_id": {
+          "format": "uuid",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "excluded_node_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Excluded Node Ids",
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/ImpulseKind"
+        },
+        "node_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Node Ids",
+          "type": "array"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/GeoPoint"
+        },
+        "quality": {
+          "$ref": "#/$defs/LocationQuality"
+        },
+        "report_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Report Ids",
+          "type": "array"
+        },
+        "residuals_ms": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Residuals Ms",
+          "type": "object"
+        },
+        "rms_residual_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rms Residual Ms"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "kind",
+        "quality",
+        "position",
+        "ellipse",
+        "occurred_at",
+        "node_ids",
+        "report_ids",
+        "updated_at"
+      ],
+      "title": "ImpulseEvent",
+      "type": "object"
+    },
+    "ImpulseEventDetail": {
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "$ref": "#/$defs/ImpulseEvent"
+        },
+        "reports": {
+          "items": {
+            "$ref": "#/$defs/ImpulseReport"
+          },
+          "title": "Reports",
+          "type": "array"
+        }
+      },
+      "required": [
+        "event",
+        "reports"
+      ],
+      "title": "ImpulseEventDetail",
+      "type": "object"
+    },
+    "ImpulseFeatures": {
+      "additionalProperties": false,
+      "properties": {
+        "band_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "minItems": 32,
+          "title": "Band Db",
+          "type": "array"
+        },
+        "clipped": {
+          "title": "Clipped",
+          "type": "boolean"
+        },
+        "duration_ms": {
+          "maximum": 60000,
+          "minimum": 0,
+          "title": "Duration Ms",
+          "type": "number"
+        },
+        "peak_dbfs": {
+          "maximum": 0,
+          "minimum": -200,
+          "title": "Peak Dbfs",
+          "type": "number"
+        },
+        "rise_time_ms": {
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Rise Time Ms",
+          "type": "number"
+        },
+        "snr_db": {
+          "maximum": 150,
+          "minimum": -50,
+          "title": "Snr Db",
+          "type": "number"
+        }
+      },
+      "required": [
+        "peak_dbfs",
+        "snr_db",
+        "rise_time_ms",
+        "duration_ms",
+        "clipped",
+        "band_db"
+      ],
+      "title": "ImpulseFeatures",
+      "type": "object"
+    },
+    "ImpulseKind": {
+      "enum": [
+        "drone_impact",
+        "unassociated"
+      ],
+      "title": "ImpulseKind",
+      "type": "string"
+    },
+    "ImpulseReport": {
+      "additionalProperties": false,
+      "properties": {
+        "features": {
+          "$ref": "#/$defs/ImpulseFeatures"
+        },
+        "onset_at": {
+          "format": "date-time",
+          "title": "Onset At",
+          "type": "string"
+        },
+        "onset_sigma_s": {
+          "exclusiveMinimum": 0,
+          "maximum": 5,
+          "title": "Onset Sigma S",
+          "type": "number"
+        },
+        "report_id": {
+          "format": "uuid",
+          "title": "Report Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sensor_location": {
+          "$ref": "#/$defs/SensorLocation"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "time_quality": {
+          "$ref": "#/$defs/TimeQuality"
+        }
+      },
+      "required": [
+        "source",
+        "onset_at",
+        "onset_sigma_s",
+        "time_quality",
+        "sensor_location",
+        "features"
+      ],
+      "title": "ImpulseReport",
+      "type": "object"
+    },
     "IngestResult": {
       "additionalProperties": false,
       "properties": {
@@ -302,6 +583,9 @@
               "$ref": "#/$defs/NodeView"
             },
             {
+              "$ref": "#/$defs/ImpulseEvent"
+            },
+            {
               "type": "null"
             }
           ],
@@ -313,6 +597,7 @@
             "observation",
             "track",
             "node_status",
+            "impulse_event",
             "resync"
           ],
           "title": "Type",
@@ -324,6 +609,15 @@
       ],
       "title": "LiveEvent",
       "type": "object"
+    },
+    "LocationQuality": {
+      "enum": [
+        "multilaterated",
+        "ambiguous",
+        "coarse"
+      ],
+      "title": "LocationQuality",
+      "type": "string"
     },
     "NodeRegistration": {
       "additionalProperties": false,
@@ -812,6 +1106,15 @@
     },
     "Heartbeat": {
       "$ref": "#/$defs/Heartbeat"
+    },
+    "ImpulseEvent": {
+      "$ref": "#/$defs/ImpulseEvent"
+    },
+    "ImpulseEventDetail": {
+      "$ref": "#/$defs/ImpulseEventDetail"
+    },
+    "ImpulseReport": {
+      "$ref": "#/$defs/ImpulseReport"
     },
     "IngestResult": {
       "$ref": "#/$defs/IngestResult"

@@ -66,6 +66,16 @@ def to_utc_ms(value: datetime) -> datetime:
     return value.replace(microsecond=value.microsecond // 1000 * 1000)
 
 
+def to_utc_us(value: datetime) -> datetime:
+    """Require a timezone-aware timestamp; return it in UTC, keeping microseconds.
+
+    Arrival-time differences between nodes need sub-millisecond precision.
+    """
+    if value.tzinfo is None:
+        raise ValueError("timestamp must include a timezone")
+    return value.astimezone(UTC)
+
+
 class WireModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 

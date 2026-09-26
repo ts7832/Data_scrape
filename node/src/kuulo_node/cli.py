@@ -42,6 +42,9 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--input", type=Path, help="replay a wav file instead of the microphone")
     run_p.add_argument("--speed", type=float, default=1.0, help="wav replay speed; 0 = max")
     run_p.add_argument("--print-scores", action="store_true", help="print scores per window")
+    run_p.add_argument("--debug-save-clips", type=Path, metavar="DIR",
+                       help="save each detection's raw audio as a wav in DIR (local only; off "
+                            "by default because it records whatever the microphone hears)")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -74,7 +77,8 @@ def main(argv: list[str] | None = None) -> int:
                 sample_rate=cfg.traces.sample_rate,
             )
         runner = NodeRunner(cfg, keys, classifier, uplink, print_scores=args.print_scores,
-                            traces=store, trace_uploader=uploader)
+                            traces=store, trace_uploader=uploader,
+                            debug_clip_dir=args.debug_save_clips)
         if args.input:
             blocks = wav_source(args.input, speed=args.speed)
         else:

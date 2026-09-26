@@ -105,3 +105,23 @@ def test_detection_is_recorded_as_traces_and_reported_to_the_uploader(tmp_path):
     segments = store.segments(detection_id)
     assert segments and segments[-1].final
     assert tu.polls > 0 and tu.pumps > 0
+
+
+def test_debug_clips_are_saved_locally_only_when_enabled(tmp_path):
+    import soundfile as sf
+
+    clips = tmp_path / "clips"
+    r, up = runner(tmp_path, lambda i: {PROPELLER: 0.9 if 3 <= i < 10 else 0.0},
+                   debug_clip_dir=clips)
+    r.run(blocks(12))
+    [start] = [m for p, m in up.sent if p == "/v1/observations" and m.event.phase.value == "start"]
+    [wav] = list(clips.glob("*.wav"))
+    assert wav.stem == str(start.event.detection_id)
+    data, rate = sf.read(wav)
+    assert rate == SAMPLE_RATE and 3 < data.size / rate < 12
+
+
+def test_no_clips_are_written_by_default(tmp_path):
+    r, _ = runner(tmp_path, lambda i: {PROPELLER: 0.9 if 3 <= i < 10 else 0.0})
+    r.run(blocks(12))
+    assert not list(tmp_path.rglob("*.wav"))

@@ -7,6 +7,8 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from uuid import UUID
 
 import numpy as np
 
@@ -15,7 +17,7 @@ from kuulo_protocol.signing import sign
 
 from . import __version__
 from .acoustic import AcousticMeter
-from .audio import HOP_S, MIC_HELP, AudioBlock, MicHealth, Windower
+from .audio import HOP_S, MIC_HELP, SAMPLE_RATE, AudioBlock, MicHealth, Windower
 from .classify import Classifier, drone_score
 from .config import NodeConfig
 from .detector import Detector, utc_now
@@ -54,6 +56,7 @@ class NodeRunner:
         out: Callable[[str], None] = print,
         traces: TraceStore | None = None,
         trace_uploader=None,
+        debug_clip_dir: Path | None = None,
     ) -> None:
         self.cfg, self.keys, self.classifier, self.uplink = cfg, keys, classifier, uplink
         self._now, self._monotonic = now, monotonic
@@ -69,6 +72,10 @@ class NodeRunner:
         self._high_run_s = 0.0  # current run of windows at >= 0.8 in this detection
         self._max_high_run_s = 0.0
         self._ended: list[tuple] = []
+        # Opt-in only (--debug-save-clips): raw detection audio, written locally, never uploaded.
+        self._clip_dir = debug_clip_dir
+        self._clip: list[np.ndarray] = []
+        self._clip_id: UUID | None = None
 
     def _registration(self) -> NodeRegistration:
         return NodeRegistration(
@@ -124,10 +131,25 @@ class NodeRunner:
         self._high_run_s = self._high_run_s + HOP_S if score >= PUSH_CONFIDENCE else 0.0
         self._max_high_run_s = max(self._max_high_run_s, self._high_run_s)
 
+    def _save_clip(self, block: AudioBlock) -> None:
+        active = self._detector.active_detection_id
+        if self._clip_id is not None and active != self._clip_id:
+            import soundfile as sf
+
+            self._clip_dir.mkdir(parents=True, exist_ok=True)
+            sf.write(self._clip_dir / f"{self._clip_id}.wav", np.concatenate(self._clip),
+                     SAMPLE_RATE)
+            self._clip, self._clip_id = [], None
+        if active is not None:
+            self._clip_id = active
+            self._clip.append(block.samples)
+
     def _record(self, block: AudioBlock) -> None:
         """Feed traces after the detector has seen this block, then report ended detections."""
         if self._traces is not None:
             self._traces.feed(block.samples, block.t, self._detector.active_detection_id)
+        if self._clip_dir is not None:
+            self._save_clip(block)
         ended, self._ended = self._ended, []
         if self._trace_uploader is not None:
             for detection_id, sustained in ended:

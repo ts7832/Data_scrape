@@ -47,6 +47,10 @@ class Detector:
     def _new_smoother(self) -> DetectionSmoother:
         return DetectionSmoother(self.cfg.smoother, id_factory=self._id_factory)
 
+    @property
+    def active_detection_id(self) -> UUID | None:
+        return self._smoother.detection_id if self._smoother.active else None
+
     def process(self, t: float, score: float, acoustic: Acoustic) -> Observation | None:
         self._last_score, self._last_acoustic = score, acoustic
         phase = self._smoother.push(t, score)

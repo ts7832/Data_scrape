@@ -57,3 +57,17 @@ def test_state_dir_defaults_next_to_config(tmp_path):
     path = tmp_path / "c.toml"
     path.write_text("\n".join(lines))
     assert load_config(path).state_dir == tmp_path / "demo-laptop-state"
+
+
+def test_trace_settings_default_to_the_spec_values(tmp_path):
+    cfg = load_config(EXAMPLE)
+    assert cfg.traces.enabled is True
+    assert cfg.traces.budget_mb == 500 and cfg.traces.upload_mb_per_day == 50
+    assert cfg.traces.sample_rate == 0.01
+
+
+def test_trace_sample_rate_must_be_a_probability(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text(EXAMPLE.read_text() + "\n[traces]\nsample_rate = 2.0\n")
+    with pytest.raises(ConfigError, match="sample_rate"):
+        load_config(path)

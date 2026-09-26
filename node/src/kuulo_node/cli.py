@@ -14,6 +14,8 @@ from .config import ConfigError, load_config
 from .keys import load_or_create_keys
 from .outbox import Outbox
 from .runner import NodeRunner
+from .tracestore import TraceStore
+from .traceupload import TraceUploader
 from .uplink import RegistrationConflict, Uplink
 
 log = logging.getLogger("kuulo.node")
@@ -51,7 +53,17 @@ def main(argv: list[str] | None = None) -> int:
         if len(outbox):
             log.info("%d unsent messages from a previous run will be delivered", len(outbox))
         uplink = Uplink(client, outbox=outbox)
-        runner = NodeRunner(cfg, keys, classifier, uplink, print_scores=args.print_scores)
+        store = uploader = None
+        if cfg.traces.enabled:
+            store = TraceStore(cfg.state_dir / "traces", cfg.node_id, keys.private_key,
+                               cfg.time_quality, budget_bytes=int(cfg.traces.budget_mb * 2**20))
+            uploader = TraceUploader(
+                client, store, node_id=cfg.node_id, private_key=keys.private_key,
+                upload_bytes_per_day=int(cfg.traces.upload_mb_per_day * 2**20),
+                sample_rate=cfg.traces.sample_rate,
+            )
+        runner = NodeRunner(cfg, keys, classifier, uplink, print_scores=args.print_scores,
+                            traces=store, trace_uploader=uploader)
         if args.input:
             blocks = wav_source(args.input, speed=args.speed)
         else:

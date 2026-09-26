@@ -30,3 +30,11 @@ update_every_s = 5.0
 "Helicopter" = 0.8
 "Aircraft" = 0.6
 "Aircraft engine" = 0.6
+
+# Feature traces (coarse 32-band spectra, never audio) recorded during detections.
+# Defaults shown; uncomment a [traces] table to change them.
+# [traces]
+# enabled = true
+# budget_mb = 500           # local disk budget, least valuable traces evicted first
+# upload_mb_per_day = 50    # for auto-push and hard-negative samples; server requests bypass it
+# sample_rate = 0.01        # share of uncorroborated detections uploaded as hard negatives

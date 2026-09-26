@@ -15,6 +15,14 @@ class ConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class TraceConfig:
+    enabled: bool = True
+    budget_mb: float = 500.0
+    upload_mb_per_day: float = 50.0
+    sample_rate: float = 0.01
+
+
+@dataclass(frozen=True)
 class NodeConfig:
     node_id: str
     server_url: str
@@ -26,6 +34,7 @@ class NodeConfig:
     smoother: SmootherConfig
     weights: dict[str, float]
     state_dir: Path  # outbox and feature traces; never inside the repository's tracked files
+    traces: TraceConfig = TraceConfig()
 
 
 def _require(table: dict, key: str, where: str):
@@ -73,6 +82,16 @@ def load_config(path: Path) -> NodeConfig:
             raise ConfigError(f"weight for '{name}' must be in (0, 1], got {w}")
     key_file = Path(_require(raw, "key_file", ""))
     state_dir = rel(raw["state_dir"]) if "state_dir" in raw else base / f"{node_id}-state"
+    tr = raw.get("traces", {})
+    tdef = TraceConfig()
+    traces = TraceConfig(
+        enabled=bool(tr.get("enabled", tdef.enabled)),
+        budget_mb=float(tr.get("budget_mb", tdef.budget_mb)),
+        upload_mb_per_day=float(tr.get("upload_mb_per_day", tdef.upload_mb_per_day)),
+        sample_rate=float(tr.get("sample_rate", tdef.sample_rate)),
+    )
+    if not 0 <= traces.sample_rate <= 1:
+        raise ConfigError(f"[traces] sample_rate must be in [0, 1], got {traces.sample_rate}")
     return NodeConfig(
         node_id=node_id,
         server_url=server_url,
@@ -84,4 +103,5 @@ def load_config(path: Path) -> NodeConfig:
         smoother=smoother,
         weights=weights,
         state_dir=state_dir,
+        traces=traces,
     )

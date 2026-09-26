@@ -70,3 +70,38 @@ def test_blocked_mic_warns_with_settings_path_and_reports_mic_not_ok(tmp_path, c
 def test_format_scores_shows_drone_score_and_top_classes():
     line = format_scores(1.5, 0.72, {"Speech": 0.9, PROPELLER: 0.3, "Music": 0.1, "Bird": 0.05})
     assert "drone=0.72" in line and "Speech 0.90" in line and "Bird" not in line
+
+
+class RecordingTraceUploader:
+    def __init__(self):
+        self.ended = []
+        self.polls = self.pumps = 0
+
+    def on_detection_end(self, detection_id, sustained_high_s):
+        self.ended.append((detection_id, sustained_high_s))
+
+    def poll(self):
+        self.polls += 1
+
+    def pump(self):
+        self.pumps += 1
+
+
+def test_detection_is_recorded_as_traces_and_reported_to_the_uploader(tmp_path):
+    from kuulo_node.tracestore import TraceStore
+
+    cfg = make_test_config(tmp_path)
+    keys = load_or_create_keys(cfg.key_file)
+    store = TraceStore(tmp_path / "traces", cfg.node_id, keys.private_key, cfg.time_quality)
+    tu = RecordingTraceUploader()
+    # 0.9 for windows 3..59 (57 windows at a 0.4875 s hop, ~27.8 s sustained), then quiet.
+    r, up = runner(tmp_path, lambda i: {PROPELLER: 0.9 if 3 <= i < 60 else 0.0},
+                   traces=store, trace_uploader=tu)
+    r.run(blocks(45))
+    starts = [m for p, m in up.sent if p == "/v1/observations" and m.event.phase.value == "start"]
+    [(detection_id, sustained)] = tu.ended
+    assert detection_id == starts[0].event.detection_id
+    assert 26 <= sustained <= 29
+    segments = store.segments(detection_id)
+    assert segments and segments[-1].final
+    assert tu.polls > 0 and tu.pumps > 0

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { circlePolygon, haversineM } from "./geo";
+import { circlePolygon, ellipsePolygon, haversineM } from "./geo";
 import { nodesToGeoJSON, tracksToGeoJSON } from "./layers";
 
 describe("geo", () => {
@@ -8,6 +8,17 @@ describe("geo", () => {
     expect(ring.length).toBe(33);
     expect(ring[0]).toEqual(ring[32]);
     for (const [lon, lat] of ring) expect(haversineM(60.17, 24.94, lat, lon)).toBeCloseTo(500, -1);
+  });
+});
+
+describe("ellipsePolygon", () => {
+  it("has the right axes and orientation", () => {
+    const ring = ellipsePolygon(60.17, 24.94, 400, 100, 90, 64);
+    expect(ring.length).toBe(65);
+    expect(ring[0]).toEqual(ring[64]);
+    expect(haversineM(60.17, 24.94, ring[0][1], ring[0][0])).toBeCloseTo(400, -1);
+    expect(ring[0][0]).toBeGreaterThan(24.94);                       // major axis points east
+    expect(haversineM(60.17, 24.94, ring[16][1], ring[16][0])).toBeCloseTo(100, -1);
   });
 });
 

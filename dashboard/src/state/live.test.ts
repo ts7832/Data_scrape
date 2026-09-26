@@ -14,7 +14,7 @@ function harness() {
   const sockets: FakeSocket[] = [];
   const actions: Action[] = [];
   const timers: { fn: () => void; ms: number }[] = [];
-  let resolveSnapshot: (v: { nodes: never[]; tracks: never[] }) => void = () => {};
+  let resolveSnapshot: (v: { nodes: never[]; tracks: never[]; impulses: never[] }) => void = () => {};
   let snapshots = 0;
   const stop = startLive({
     url: "ws://x/v1/live",
@@ -24,7 +24,7 @@ function harness() {
     schedule: (fn, ms) => { timers.push({ fn, ms }); },
     now: () => 42,
   });
-  return { sockets, actions, timers, stop, resolve: () => resolveSnapshot({ nodes: [], tracks: [] }), snapshots: () => snapshots };
+  return { sockets, actions, timers, stop, resolve: () => resolveSnapshot({ nodes: [], tracks: [], impulses: [] }), snapshots: () => snapshots };
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0));

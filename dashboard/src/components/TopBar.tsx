@@ -25,6 +25,8 @@ export function TopBar({ state }: { state: State }) {
   const online = nodes.filter((n) => n.status === "online").length;
   const tracks = Object.values(state.tracks);
   const confirmed = tracks.filter((t) => t.status === "confirmed").length;
+  const impulses = Object.values(state.impulses);
+  const impacts = impulses.filter((e) => e.kind === "drone_impact").length;
 
   return (
     <Navbar className="topbar">
@@ -44,6 +46,9 @@ export function TopBar({ state }: { state: State }) {
         <NavbarDivider />
         <Stat label="TRACKS" value={tracks.length} />
         {confirmed > 0 && <Tag minimal intent={Intent.DANGER}>{confirmed} CONFIRMED</Tag>}
+        <NavbarDivider />
+        <Stat label="IMPACTS" value={impacts} />
+        {impacts > 0 && <Tag minimal intent={Intent.DANGER}>{impacts} IMPACT{impacts > 1 ? "S" : ""}</Tag>}
         <NavbarDivider />
         <UtcClock />
       </NavbarGroup>

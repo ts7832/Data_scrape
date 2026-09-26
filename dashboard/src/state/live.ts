@@ -1,4 +1,4 @@
-import type { LiveEvent, NodeView, Track } from "../api/types";
+import type { ImpulseEvent, LiveEvent, NodeView, Track } from "../api/types";
 import type { Action } from "./reducer";
 
 export interface SocketLike {
@@ -11,7 +11,7 @@ export interface SocketLike {
 export interface LiveDeps {
   url: string;
   openSocket(url: string): SocketLike;
-  fetchSnapshot(): Promise<{ nodes: NodeView[]; tracks: Track[] }>;
+  fetchSnapshot(): Promise<{ nodes: NodeView[]; tracks: Track[]; impulses: ImpulseEvent[] }>;
   dispatch(action: Action): void;
   schedule(fn: () => void, ms: number): void;
   now(): number;
@@ -44,7 +44,7 @@ export function startLive(deps: LiveDeps): () => void {
       try {
         const snap = await deps.fetchSnapshot();
         if (stopped || socket !== ws) return;
-        deps.dispatch({ type: "snapshot", nodes: snap.nodes, tracks: snap.tracks });
+        deps.dispatch({ type: "snapshot", nodes: snap.nodes, tracks: snap.tracks, impulses: snap.impulses });
         for (const event of buffer) deps.dispatch({ type: "live", event, receivedAt: deps.now() });
         buffer = [];
         loading = false;

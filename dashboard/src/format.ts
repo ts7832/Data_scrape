@@ -3,6 +3,11 @@ export function shortTrackId(trackId: string): string {
   return `T-${trackId.replace(/-/g, "").slice(0, 4).toUpperCase()}`;
 }
 
+/** Short, readable callsign for an impulse event uuid, e.g. "I-3F2A". */
+export function shortImpulseId(eventId: string): string {
+  return shortTrackId(eventId).replace(/^T-/, "I-");
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** HH:MM:SS in UTC for a millisecond timestamp. */

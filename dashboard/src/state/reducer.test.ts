@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
-import type { NodeView, Track } from "../api/types";
+import type { ImpulseEvent, NodeView, Track } from "../api/types";
 import { initialState, reducer, TRAIL_MAX, PULSE_MS } from "./reducer";
+
+const impact: ImpulseEvent = {
+  event_id: "e1", kind: "drone_impact", quality: "multilaterated",
+  position: { lat: 60.17, lon: 24.94 },
+  ellipse: { semi_major_m: 120, semi_minor_m: 40, bearing_deg: 30, confidence: 0.95 },
+  alternatives: [], occurred_at: "2026-09-26T12:00:00Z", node_ids: ["a", "b", "c", "d"],
+  excluded_node_ids: [], report_ids: ["r1"], residuals_ms: {}, rms_residual_ms: 1.2,
+  associated_track_id: "t1", updated_at: "2026-09-26T12:00:01Z",
+};
 
 const node = (id: string, status: NodeView["status"] = "online"): NodeView => ({
   node_id: id,
@@ -73,5 +82,38 @@ describe("reducer", () => {
   it("resync event does not change state", () => {
     const s = reducer(initialState, { type: "live", event: { type: "resync" }, receivedAt: 0 });
     expect(s).toBe(initialState);
+  });
+
+  it("impulse events upsert, log IMPACT vs IMPULSE, and selection is exclusive with tracks", () => {
+    let s = reducer(initialState, { type: "select", trackId: "t1" });
+    s = reducer(s, { type: "live", receivedAt: 1, event: { type: "impulse_event", data: impact } });
+    expect(s.impulses[impact.event_id]).toEqual(impact);
+    expect(s.events[0].message).toMatch(/^IMPACT/);
+    s = reducer(s, { type: "selectImpulse", id: impact.event_id });
+    expect(s.selectedTrackId).toBeNull();
+    s = reducer(s, { type: "select", trackId: "t1" });
+    expect(s.selectedImpulseId).toBeNull();
+  });
+
+  it("snapshot replaces impulses", () => {
+    let s = reducer(initialState, { type: "live", receivedAt: 1,
+      event: { type: "impulse_event", data: impact } });
+    s = reducer(s, { type: "snapshot", nodes: [], tracks: [],
+      impulses: [{ ...impact, event_id: "e2" }] });
+    expect(Object.keys(s.impulses)).toEqual(["e2"]);
+  });
+
+  it("unassociated impulse event logs as IMPULSE not IMPACT", () => {
+    const s = reducer(initialState, { type: "live", receivedAt: 1,
+      event: { type: "impulse_event", data: { ...impact, kind: "unassociated" } } });
+    expect(s.events[0].message).toMatch(/^IMPULSE/);
+  });
+
+  it("re-publishing the same event without a quality change does not log again", () => {
+    let s = reducer(initialState, { type: "live", receivedAt: 1,
+      event: { type: "impulse_event", data: impact } });
+    const afterFirst = s.events.length;
+    s = reducer(s, { type: "live", receivedAt: 2, event: { type: "impulse_event", data: impact } });
+    expect(s.events.length).toBe(afterFirst);
   });
 });

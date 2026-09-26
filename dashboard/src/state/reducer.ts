@@ -1,5 +1,5 @@
-import type { LiveEvent, NodeView, Observation, Track } from "../api/types";
-import { percent, shortTrackId } from "../format";
+import type { ImpulseEvent, LiveEvent, NodeView, Observation, Track } from "../api/types";
+import { percent, shortImpulseId, shortTrackId } from "../format";
 
 export type Connection = "connecting" | "live" | "reconnecting";
 export interface Pulse { nodeId: string; at: number }
@@ -20,15 +20,18 @@ export interface State {
   pulses: Pulse[];
   connection: Connection;
   selectedTrackId: string | null;
+  impulses: Record<string, ImpulseEvent>;
+  selectedImpulseId: string | null;
   events: LogEntry[]; // newest first, never longer than EVENT_LOG_MAX
   eventSeq: number;
 }
 
 export type Action =
-  | { type: "snapshot"; nodes: NodeView[]; tracks: Track[] }
+  | { type: "snapshot"; nodes: NodeView[]; tracks: Track[]; impulses?: ImpulseEvent[] }
   | { type: "live"; event: LiveEvent; receivedAt: number }
   | { type: "connection"; connection: Connection }
   | { type: "select"; trackId: string | null }
+  | { type: "selectImpulse"; id: string | null }
   | { type: "expirePulses"; now: number };
 
 export const TRAIL_MAX = 60;
@@ -38,7 +41,7 @@ export const EVENT_LOG_MAX = 200;
 
 export const initialState: State = {
   nodes: {}, tracks: {}, trails: {}, pulses: [], connection: "connecting", selectedTrackId: null,
-  events: [], eventSeq: 0,
+  impulses: {}, selectedImpulseId: null, events: [], eventSeq: 0,
 };
 
 const TRACK_TONE: Record<Track["status"], Tone> = {
@@ -46,6 +49,9 @@ const TRACK_TONE: Record<Track["status"], Tone> = {
 };
 const NODE_TONE: Record<NodeView["status"], Tone> = {
   online: "success", stale: "warning", offline: "danger",
+};
+const IMPULSE_TONE: Record<ImpulseEvent["kind"], Tone> = {
+  drone_impact: "danger", unassociated: "warning",
 };
 
 function log(state: State, at: number, source: string, message: string, tone: Tone): State {
@@ -55,6 +61,10 @@ function log(state: State, at: number, source: string, message: string, tone: To
     eventSeq: entry.seq,
     events: [entry, ...state.events].slice(0, EVENT_LOG_MAX),
   };
+}
+
+function upsertImpulse(state: State, event: ImpulseEvent): State {
+  return { ...state, impulses: { ...state.impulses, [event.event_id]: event } };
 }
 
 function upsertTrack(state: State, track: Track): State {
@@ -90,7 +100,10 @@ export function reducer(state: State, action: Action): State {
         if (!trails[t.track_id]) trails[t.track_id] = [[t.position.lon, t.position.lat]];
       }
       const selectedTrackId = state.selectedTrackId && state.selectedTrackId in tracks ? state.selectedTrackId : null;
-      return { ...state, nodes, tracks, trails, selectedTrackId };
+      const impulses = Object.fromEntries((action.impulses ?? []).map((e) => [e.event_id, e]));
+      const selectedImpulseId =
+        state.selectedImpulseId && state.selectedImpulseId in impulses ? state.selectedImpulseId : null;
+      return { ...state, nodes, tracks, trails, selectedTrackId, impulses, selectedImpulseId };
     }
     case "live": {
       const { event } = action;
@@ -120,6 +133,16 @@ export function reducer(state: State, action: Action): State {
           return log(withPulse, action.receivedAt, o.source.id, message,
             o.event.phase === "start" ? "primary" : "none");
         }
+        case "impulse_event": {
+          const e = event.data as ImpulseEvent;
+          const previous = state.impulses[e.event_id];
+          const next = upsertImpulse(state, e);
+          if (previous && previous.quality === e.quality) return next;
+          const label = e.kind === "drone_impact" ? "IMPACT" : "IMPULSE";
+          const message = `${label} ${e.node_ids.length} SENSORS ±${Math.round(e.ellipse.semi_major_m)} M`;
+          return log(next, action.receivedAt, shortImpulseId(e.event_id), message,
+            IMPULSE_TONE[e.kind]);
+        }
         default:
           return state;
       }
@@ -127,7 +150,9 @@ export function reducer(state: State, action: Action): State {
     case "connection":
       return { ...state, connection: action.connection };
     case "select":
-      return { ...state, selectedTrackId: action.trackId };
+      return { ...state, selectedTrackId: action.trackId, selectedImpulseId: null };
+    case "selectImpulse":
+      return { ...state, selectedImpulseId: action.id, selectedTrackId: null };
     case "expirePulses": {
       const pulses = state.pulses.filter((p) => action.now - p.at <= PULSE_MS);
       return pulses.length === state.pulses.length ? state : { ...state, pulses };

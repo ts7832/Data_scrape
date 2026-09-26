@@ -19,3 +19,6 @@ export const TRACK_INTENT: Record<string, Intent> = {
 export const NODE_INTENT: Record<string, Intent> = {
   online: Intent.SUCCESS, stale: Intent.WARNING, offline: Intent.NONE,
 };
+export const IMPULSE_INTENT: Record<string, Intent> = {
+  drone_impact: Intent.DANGER, unassociated: Intent.WARNING,
+};

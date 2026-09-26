@@ -3,7 +3,15 @@ import { Map as MapLibreMap, Marker, type GeoJSONSource, type MapLayerMouseEvent
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Action, State } from "../state/reducer";
-import { nodesToGeoJSON, pulsesToGeoJSON, trailsToGeoJSON, tracksToGeoJSON, uncertaintyToGeoJSON } from "../map/layers";
+import {
+  impulseEllipsesToGeoJSON,
+  impulsesToGeoJSON,
+  nodesToGeoJSON,
+  pulsesToGeoJSON,
+  trailsToGeoJSON,
+  tracksToGeoJSON,
+  uncertaintyToGeoJSON,
+} from "../map/layers";
 import { shortTrackId } from "../format";
 import { PALETTE } from "../theme";
 
@@ -22,7 +30,9 @@ const NODE_COLORS = ["match", ["get", "status"],
   "online", PALETTE.node, "stale", PALETTE.warning, PALETTE.muted];
 const TRACK_COLORS = ["match", ["get", "status"],
   "confirmed", PALETTE.danger, "downgraded", PALETTE.muted, PALETTE.warning];
+const IMPULSE_COLORS = ["match", ["get", "kind"], "drone_impact", PALETTE.danger, PALETTE.warning];
 const NO_TRACK = "__none__";
+const NO_IMPULSE = "__none__";
 
 export function MapView({ state, dispatch }: { state: State; dispatch: (a: Action) => void }) {
   const container = useRef<HTMLDivElement>(null);
@@ -45,7 +55,8 @@ export function MapView({ state, dispatch }: { state: State; dispatch: (a: Actio
     });
     mapRef.current = map;
     map.on("load", () => {
-      for (const id of ["nodes", "tracks", "uncertainty", "trails", "pulses"]) {
+      for (const id of ["nodes", "tracks", "uncertainty", "trails", "pulses", "impulses",
+                       "impulse-ellipses"]) {
         map.addSource(id, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       }
       map.addLayer({ id: "uncertainty", type: "fill", source: "uncertainty",
@@ -74,6 +85,27 @@ export function MapView({ state, dispatch }: { state: State; dispatch: (a: Actio
       });
       map.on("mouseenter", "tracks", () => { map.getCanvas().style.cursor = "pointer"; });
       map.on("mouseleave", "tracks", () => { map.getCanvas().style.cursor = ""; });
+      map.addLayer({ id: "impulse-ellipses", type: "fill", source: "impulse-ellipses",
+        paint: { "fill-color": IMPULSE_COLORS as never, "fill-opacity": 0.12 } });
+      map.addLayer({ id: "impulse-ellipses-edge", type: "line", source: "impulse-ellipses",
+        paint: { "line-color": IMPULSE_COLORS as never, "line-width": 1, "line-opacity": 0.8,
+          "line-dasharray": [3, 3] } });
+      map.addLayer({ id: "impulse-selected", type: "circle", source: "impulses",
+        filter: ["==", ["get", "id"], NO_IMPULSE],
+        paint: { "circle-radius": 16, "circle-color": "rgba(0,0,0,0)",
+          "circle-stroke-width": 1.5, "circle-stroke-color": PALETTE.text } });
+      map.addLayer({ id: "impulses", type: "circle", source: "impulses",
+        paint: {
+          "circle-radius": 8, "circle-color": IMPULSE_COLORS as never,
+          "circle-opacity": ["match", ["get", "alt"], 1, 0, 1],
+          "circle-stroke-width": 2, "circle-stroke-color": IMPULSE_COLORS as never,
+        } });
+      map.on("click", "impulses", (e: MapLayerMouseEvent) => {
+        const id = e.features?.[0]?.properties?.id;
+        if (typeof id === "string") dispatch({ type: "selectImpulse", id });
+      });
+      map.on("mouseenter", "impulses", () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", "impulses", () => { map.getCanvas().style.cursor = ""; });
       loaded.current = true;
       for (const cb of onReady.current) cb();
       onReady.current = [];
@@ -100,7 +132,10 @@ export function MapView({ state, dispatch }: { state: State; dispatch: (a: Actio
       set("uncertainty", uncertaintyToGeoJSON(state.tracks));
       set("trails", trailsToGeoJSON(state.trails, state.tracks));
       set("pulses", pulsesToGeoJSON(state.pulses, state.nodes));
+      set("impulses", impulsesToGeoJSON(state.impulses));
+      set("impulse-ellipses", impulseEllipsesToGeoJSON(state.impulses));
       map.setFilter("track-selected", ["==", ["get", "id"], state.selectedTrackId ?? NO_TRACK]);
+      map.setFilter("impulse-selected", ["==", ["get", "id"], state.selectedImpulseId ?? NO_IMPULSE]);
       syncLabels(map);
     };
     const syncLabels = (map: MapLibreMap) => {

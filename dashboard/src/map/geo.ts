@@ -24,3 +24,19 @@ export function circlePolygon(lat: number, lon: number, radiusM: number, steps =
   ring.push(ring[0]);
   return ring;
 }
+
+/** Closed ring of [lon, lat] on an ellipse; bearing = major axis, degrees clockwise from north. */
+export function ellipsePolygon(lat: number, lon: number, a: number, b: number, bearingDeg: number,
+  steps = 64): [number, number][] {
+  const th = rad(bearingDeg);
+  const mLat = 110_540, mLon = 111_320 * Math.cos(rad(lat));
+  const ring: [number, number][] = [];
+  for (let i = 0; i < steps; i++) {
+    const t = (2 * Math.PI * i) / steps;
+    const x = a * Math.cos(t) * Math.sin(th) + b * Math.sin(t) * Math.cos(th);
+    const y = a * Math.cos(t) * Math.cos(th) - b * Math.sin(t) * Math.sin(th);
+    ring.push([lon + x / mLon, lat + y / mLat]);
+  }
+  ring.push(ring[0]);
+  return ring;
+}

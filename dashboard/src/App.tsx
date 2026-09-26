@@ -1,6 +1,7 @@
 import { useEffect, useReducer } from "react";
 import { fetchSnapshot } from "./api/client";
 import { EventLog } from "./components/EventLog";
+import { ImpulseDetail } from "./components/ImpulseDetail";
 import { MapView } from "./components/MapView";
 import { NodePanel } from "./components/NodePanel";
 import { TopBar } from "./components/TopBar";
@@ -33,7 +34,9 @@ export function App() {
       <TopBar state={state} />
       <NodePanel state={state} dispatch={dispatch} />
       <main className="map-area"><MapView state={state} dispatch={dispatch} /></main>
-      <TrackDetail state={state} />
+      {state.selectedImpulseId
+        ? <ImpulseDetail state={state} dispatch={dispatch} />
+        : <TrackDetail state={state} />}
       <EventLog events={state.events} />
     </div>
   );

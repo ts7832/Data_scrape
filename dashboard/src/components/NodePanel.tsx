@@ -1,8 +1,8 @@
 import { HTMLTable, Intent, Section, SectionCard, Tag, Tooltip } from "@blueprintjs/core";
-import type { NodeView, Track } from "../api/types";
-import { isoZ, percent, shortTrackId } from "../format";
+import type { ImpulseEvent, NodeView, Track } from "../api/types";
+import { isoZ, percent, shortImpulseId, shortTrackId } from "../format";
 import type { Action, State } from "../state/reducer";
-import { NODE_INTENT, TRACK_INTENT } from "../theme";
+import { IMPULSE_INTENT, NODE_INTENT, TRACK_INTENT } from "../theme";
 
 const ORDER: Record<string, number> = { confirmed: 0, tentative: 1, downgraded: 2 };
 
@@ -24,6 +24,22 @@ function TrackRow({ track, selected, onSelect }: {
       <td>{shortTrackId(track.track_id)}</td>
       <td className="num">{percent(track.confidence)}</td>
       <td><Tag minimal intent={TRACK_INTENT[track.status]}>{track.status.toUpperCase()}</Tag></td>
+    </tr>
+  );
+}
+
+function ImpulseRow({ event, selected, onSelect }: {
+  event: ImpulseEvent; selected: boolean; onSelect: () => void;
+}) {
+  return (
+    <tr className={selected ? "selected" : undefined} onClick={onSelect}>
+      <td>{shortImpulseId(event.event_id)}</td>
+      <td className="num">±{Math.round(event.ellipse.semi_major_m)} M</td>
+      <td>
+        <Tag minimal intent={IMPULSE_INTENT[event.kind]}>
+          {event.kind === "drone_impact" ? "IMPACT" : "IMPULSE"}
+        </Tag>
+      </td>
     </tr>
   );
 }
@@ -51,6 +67,7 @@ export function NodePanel({ state, dispatch }: { state: State; dispatch: (a: Act
   const online = nodes.filter((n) => n.status === "online").length;
   const tracks = Object.values(state.tracks).sort(
     (a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || b.confidence - a.confidence);
+  const impulses = Object.values(state.impulses).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 
   return (
     <aside className="panel left">
@@ -63,6 +80,20 @@ export function NodePanel({ state, dispatch }: { state: State; dispatch: (a: Act
               {tracks.length === 0 ? <EmptyRow text="NO ACTIVE TRACKS" /> : tracks.map((t) => (
                 <TrackRow key={t.track_id} track={t} selected={t.track_id === state.selectedTrackId}
                   onSelect={() => dispatch({ type: "select", trackId: t.track_id })} />
+              ))}
+            </tbody>
+          </HTMLTable>
+        </SectionCard>
+      </Section>
+      <Section compact collapsible title="Impulses" rightElement={<Tag minimal>{impulses.length}</Tag>}>
+        <SectionCard padded={false}>
+          <HTMLTable compact interactive>
+            <Cols />
+            <thead><tr><th>ID</th><th className="num">±95%</th><th>KIND</th></tr></thead>
+            <tbody>
+              {impulses.length === 0 ? <EmptyRow text="NO IMPULSES" /> : impulses.map((e) => (
+                <ImpulseRow key={e.event_id} event={e} selected={e.event_id === state.selectedImpulseId}
+                  onSelect={() => dispatch({ type: "selectImpulse", id: e.event_id })} />
               ))}
             </tbody>
           </HTMLTable>

@@ -1,7 +1,7 @@
-import type { NodeView, Track } from "../api/types";
+import type { ImpulseEvent, NodeView, Track } from "../api/types";
 import type { Pulse } from "../state/reducer";
 import { shortTrackId } from "../format";
-import { circlePolygon } from "./geo";
+import { circlePolygon, ellipsePolygon } from "./geo";
 
 type Props = Record<string, string | number>;
 export interface PointFeature { type: "Feature"; geometry: { type: "Point"; coordinates: [number, number] }; properties: Props }
@@ -59,5 +59,34 @@ export function pulsesToGeoJSON(pulses: Pulse[], nodes: Record<string, NodeView>
     features: pulses
       .filter((p) => p.nodeId in nodes)
       .map((p) => point(nodes[p.nodeId].location.lon, nodes[p.nodeId].location.lat, { id: p.nodeId })),
+  };
+}
+
+export function impulsesToGeoJSON(impulses: Record<string, ImpulseEvent>): Collection<PointFeature> {
+  const features: PointFeature[] = [];
+  for (const e of Object.values(impulses)) {
+    features.push(point(e.position.lon, e.position.lat, { id: e.event_id, kind: e.kind, alt: 0 }));
+    if (e.quality === "ambiguous") {
+      for (const alt of e.alternatives ?? []) {
+        // Same id as the primary point: it is the same event, still selectable, styled hollow.
+        features.push(point(alt.lon, alt.lat, { id: e.event_id, kind: e.kind, alt: 1 }));
+      }
+    }
+  }
+  return { type: "FeatureCollection", features };
+}
+
+export function impulseEllipsesToGeoJSON(impulses: Record<string, ImpulseEvent>) {
+  return {
+    type: "FeatureCollection" as const,
+    features: Object.values(impulses).map((e) => ({
+      type: "Feature" as const,
+      geometry: {
+        type: "Polygon" as const,
+        coordinates: [ellipsePolygon(e.position.lat, e.position.lon, e.ellipse.semi_major_m,
+          e.ellipse.semi_minor_m, e.ellipse.bearing_deg)],
+      },
+      properties: { id: e.event_id, kind: e.kind },
+    })),
   };
 }

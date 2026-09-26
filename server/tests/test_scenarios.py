@@ -58,3 +58,26 @@ def test_offline_neighbour_silence_not_counted(run_scenario):
     result = run_scenario("node_failure")
     assert TrackStatus.DOWNGRADED not in statuses(result)
     assert TrackStatus.TENTATIVE in statuses(result)
+
+
+def test_long_event_confirms_and_uploads_a_multi_segment_trace(run_scenario):
+    result = run_scenario("long_event")
+    assert TrackStatus.CONFIRMED in statuses(result)
+    per_detection: dict[str, list[int]] = {}
+    for _, detection_id, index, _ in result.traces:
+        per_detection.setdefault(detection_id, []).append(index)
+    assert max(len(v) for v in per_detection.values()) >= 10
+    assert all(reason == "fulfilled" for _, _, reason in result.requests)
+
+
+def test_helsinki_pass_uploads_traces_only_for_requested_detections(run_scenario):
+    result = run_scenario("helsinki_pass")
+    requested = {(n, d) for n, d, _ in result.requests}
+    uploaded = {(n, d) for n, d, _, _ in result.traces}
+    assert requested and uploaded == requested
+    assert all(reason == "fulfilled" for _, _, reason in result.requests)
+
+
+def test_false_alarm_uploads_no_traces(run_scenario):
+    result = run_scenario("false_alarm")
+    assert result.traces == [] and result.requests == []

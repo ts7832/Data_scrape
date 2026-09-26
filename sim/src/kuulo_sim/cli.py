@@ -54,7 +54,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Could not connect to {args.server}. Is the server running? (make server)",
               file=sys.stderr)
         return 1
-    print(f"{scenario.name}: sent {stats.sent}, rejected {stats.errors}")
+    print(f"{scenario.name}: sent {stats.sent}, rejected {stats.errors}, "
+          f"trace segments uploaded {stats.trace_segments}")
     return 0 if stats.errors == 0 else 1
 
 

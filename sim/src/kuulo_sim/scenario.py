@@ -33,6 +33,8 @@ class DroneSpec(_Spec):
     speed_mps: float = Field(gt=0)
     start_s: float = Field(default=0.0, ge=0)
     waypoints: list[tuple[float, float]] = Field(min_length=2)  # (lat, lon)
+    # >1: fly the route as a closed loop (back to the first waypoint) this many times.
+    repeat: int = Field(default=1, ge=1)
 
 
 class FalseAlarmSpec(_Spec):
@@ -103,7 +105,11 @@ def drone_position(drone: DroneSpec, t: float) -> GeoPoint | None:
     if t < drone.start_s:
         return None
     origin = GeoPoint(lat=drone.waypoints[0][0], lon=drone.waypoints[0][1])
-    points = [to_local(origin, GeoPoint(lat=lat, lon=lon)) for lat, lon in drone.waypoints]
+    route = list(drone.waypoints)
+    if drone.repeat > 1:
+        loop = [*route, route[0]]
+        route = loop + [p for _ in range(drone.repeat - 1) for p in loop[1:]]
+    points = [to_local(origin, GeoPoint(lat=lat, lon=lon)) for lat, lon in route]
     remaining = (t - drone.start_s) * drone.speed_mps
     for (x0, y0), (x1, y1) in pairwise(points):
         length = hypot(x1 - x0, y1 - y0)

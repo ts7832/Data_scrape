@@ -1,0 +1,24 @@
+# A 10-minute loiter over three nodes: one continuous detection per node, so each
+# detection's FeatureTrace spans many 60 s segments (spec §9, §13 item 5).
+name: long_event
+seed: 11
+duration_s: 640
+nodes:
+  - {id: n01, lat: 60.1699, lon: 24.9384}
+  - {id: n02, lat: 60.1699, lon: 24.94558}
+  - {id: n03, lat: 60.17350, lon: 24.94199}
+drones:
+  - id: d1
+    speed_mps: 10
+    start_s: 5
+    repeat: 7
+    # A ~150 m-radius octagon centred between the three nodes.
+    waypoints:
+      - [60.17245, 24.94199]
+      - [60.17199, 24.94388]
+      - [60.17110, 24.94466]
+      - [60.17021, 24.94388]
+      - [60.16975, 24.94199]
+      - [60.17021, 24.94010]
+      - [60.17110, 24.93932]
+      - [60.17199, 24.94010]

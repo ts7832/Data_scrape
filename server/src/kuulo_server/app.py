@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 from contextlib import asynccontextmanager
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import (
@@ -24,15 +25,26 @@ from fastapi.responses import JSONResponse
 from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import select
 
-from kuulo_protocol.api import IngestResult, LiveEvent, NodeStatus, NodeView, TrackDetail
+from kuulo_protocol.api import (
+    ImpulseEventDetail,
+    IngestResult,
+    LiveEvent,
+    NodeStatus,
+    NodeView,
+    TrackDetail,
+)
+from kuulo_protocol.impulses import ImpulseEvent, ImpulseReport
 from kuulo_protocol.models import Heartbeat, NodeRegistration, Observation, Track, TrackStatus
 from kuulo_protocol.traces import FeatureTraceHeader, TraceRequest, TraceUnavailable
 
 from .config import Settings
 from .db import NodeRow, as_utc, make_session_factory
 from .fusion.context import DbFusionContext
-from .fusion.loader import load_engine
-from .ingest import IngestError, ingest_heartbeat, ingest_observation, register_node
+from .fusion.loader import load_engine, load_plugin
+from .impact.base import LocatorConfig
+from .impact.context import DbImpulseContext
+from .impulses import impulse_event_detail, persist_impulse_event, recent_impulse_events
+from .ingest import IngestError, ingest_heartbeat, ingest_impulse, ingest_observation, register_node
 from .live import LiveHub
 from .status import node_status, node_view
 from .traces import (
@@ -55,6 +67,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     last_status: dict[str, NodeStatus] = {}
 
     engine = load_engine(settings.fusion_engine)
+    locator_config = LocatorConfig(air_temperature_c=settings.air_temperature_c)
+    try:
+        locator = load_plugin(settings.impulse_locator, locator_config)
+    except (ImportError, AttributeError) as exc:
+        raise ImportError(f"impulse_locator {settings.impulse_locator!r} cannot be loaded: "
+                          f"{exc}") from exc
     with sessions() as session:
         closed = close_open_tracks(session)
     if closed:
@@ -98,6 +116,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             hub.publish(LiveEvent(type="observation", data=obs))
             run_fusion(lambda ctx: engine.on_observation(obs, ctx))
         return result
+
+    def run_locator(report: ImpulseReport) -> None:
+        try:
+            event = locator.on_report(report, DbImpulseContext(sessions, settings.clock()))
+        except Exception:
+            log.exception("impulse locator failed; ingest continues")
+            return
+        if event is None:
+            return
+        with sessions() as session:
+            persist_impulse_event(session, event)
+        hub.publish(LiveEvent(type="impulse_event", data=event))
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -171,6 +201,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             except IngestError as exc:
                 results.append({"status": "rejected", "reason": exc.reason})
         return results
+
+    @app.post("/v1/impulses")
+    async def post_impulse(report: ImpulseReport) -> IngestResult:
+        with sessions() as session:
+            result = ingest_impulse(session, report, settings.clock(), settings)
+        if result.status == "accepted":
+            run_locator(report)
+        return result
+
+    @app.get("/v1/impulse-events")
+    async def get_impulse_events(hours: float = 24.0) -> list[ImpulseEvent]:
+        with sessions() as session:
+            return recent_impulse_events(session, settings.clock() - timedelta(hours=hours))
+
+    @app.get("/v1/impulse-events/{event_id}")
+    async def get_impulse_event(event_id: str) -> ImpulseEventDetail:
+        with sessions() as session:
+            detail = impulse_event_detail(session, event_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="unknown impulse event")
+        return detail
 
     @app.post("/v1/heartbeats")
     async def post_heartbeat(hb: Heartbeat) -> dict:

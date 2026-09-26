@@ -94,6 +94,29 @@ class TraceRequestRow(Base):
     close_reason: Mapped[str | None] = mapped_column(String(16))
 
 
+class ImpulseReportRow(Base):
+    __tablename__ = "impulse_reports"
+    report_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(64), index=True)
+    onset_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    raw_json: Mapped[str] = mapped_column(Text)
+
+
+class ImpulseEventRow(Base):
+    __tablename__ = "impulse_events"
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    raw_json: Mapped[str] = mapped_column(Text)
+
+
+class ImpulseEventReportRow(Base):
+    __tablename__ = "impulse_event_reports"
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    report_id: Mapped[str] = mapped_column(String(36), primary_key=True, index=True)
+
+
 class TrackObservationRow(Base):
     __tablename__ = "track_observations"
     track_id: Mapped[str] = mapped_column(String(36), primary_key=True)

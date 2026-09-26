@@ -7,11 +7,12 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from kuulo_protocol.api import IngestResult
+from kuulo_protocol.impulses import ImpulseReport
 from kuulo_protocol.models import Heartbeat, NodeRegistration, Observation
 from kuulo_protocol.signing import verify
 
 from .config import Settings
-from .db import NodeRow, ObservationRow, as_utc
+from .db import ImpulseReportRow, NodeRow, ObservationRow, as_utc
 
 
 class IngestError(Exception):
@@ -71,6 +72,26 @@ def ingest_observation(
     )
     session.commit()
     return IngestResult(status="accepted", late=late)
+
+
+def ingest_impulse(
+    session: Session, report: ImpulseReport, now: datetime, settings: Settings
+) -> IngestResult:
+    """Late reports are accepted (an attack is exactly when networks fail); future ones aren't."""
+    node = _node_for(session, report.source.id)
+    if not verify(report, node.public_key):
+        raise IngestError(401, "bad signature")
+    _check_not_future(report.onset_at, now, settings, "onset_at")
+    if session.get(ImpulseReportRow, str(report.report_id)) is not None:
+        return IngestResult(status="duplicate")
+    session.add(
+        ImpulseReportRow(
+            report_id=str(report.report_id), node_id=report.source.id,
+            onset_at=report.onset_at, received_at=now, raw_json=report.model_dump_json(),
+        )
+    )
+    session.commit()
+    return IngestResult(status="accepted")
 
 
 def ingest_heartbeat(session: Session, hb: Heartbeat, now: datetime, settings: Settings) -> NodeRow:

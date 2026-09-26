@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import os
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -32,7 +33,21 @@ class Settings:
     max_batch: int = 100
     traces_dir: Path | None = None  # None: a "traces" folder next to the database
     max_trace_bytes: int = 4 * 1024 * 1024
+    impulse_locator: str = "kuulo_server.impact.coarse:CoarseLocator"
+    air_temperature_c: float = 10.0
 
     def __post_init__(self) -> None:
         if self.traces_dir is None:
             self.traces_dir = self.db_path.parent / "traces"
+
+    @classmethod
+    def from_env(cls, environ: Mapping[str, str] = os.environ) -> Settings:
+        """Deployment overrides: a private engine or locator is selected without code changes."""
+        overrides: dict = {}
+        if value := environ.get("KUULO_FUSION_ENGINE"):
+            overrides["fusion_engine"] = value
+        if value := environ.get("KUULO_IMPULSE_LOCATOR"):
+            overrides["impulse_locator"] = value
+        if value := environ.get("KUULO_AIR_TEMPERATURE_C"):
+            overrides["air_temperature_c"] = float(value)
+        return cls(**overrides)

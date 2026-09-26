@@ -71,3 +71,37 @@ def test_node_head_classifier_uses_the_exported_model(tmp_path):
     clf = HeadClassifier(Fake(), path)
     scores = clf.score(np.zeros(15_600, np.float32))
     assert scores["drone"] > 0.5 and scores["Speech"] == pytest.approx(0.7)
+
+
+def test_level_match_sets_rms_and_stays_in_range():
+    from kuulo_ml.evaluate import level_match
+
+    w = (0.001 * np.sin(np.arange(15_600) / 5)).astype(np.float32)
+    out = level_match(w, -20.0)
+    level = 20 * np.log10(np.sqrt(np.mean(out.astype(np.float64) ** 2)))
+    assert level == pytest.approx(-20, abs=0.1)
+    assert np.max(np.abs(level_match(w, 20.0))) <= 1.0
+
+
+def test_results_markdown_includes_notes():
+    r = evaluate_method(np.array([0.9, 0.1]), np.array([1, 0]), np.array(["drone:M3", "dog"]), 0.5)
+    assert "Note: hello" in results_markdown({"A": r}, 2, 1, notes=["Note: hello"])
+
+
+def test_first_start_uses_the_node_smoother_timing():
+    from kuulo_ml.evaluate import first_start_s
+
+    # 3 of 5 windows >= 0.5 fires START on the 3rd high window (index 4 here).
+    assert first_start_s([0, 0, 0.9, 0.9, 0.9, 0.9]) == pytest.approx(4 * 0.4875 + 0.975)
+    assert first_start_s([0.9, 0, 0.9, 0, 0, 0, 0.9]) is None
+
+
+def test_event_summary_counts_recordings():
+    from kuulo_ml.evaluate import event_summary
+
+    rows = [(1, "drone:M3", 2.0), (1, "drone:Yn", None), (0, "chainsaw", 1.0), (0, "dog", None)]
+    s = event_summary(rows)
+    assert s["drone_detected"] == 1 and s["drone_total"] == 2
+    assert s["median_start_s"] == pytest.approx(2.0)
+    assert s["hard_false_starts"] == 1 and s["hard_total"] == 1
+    assert s["other_false_starts"] == 0 and s["other_total"] == 1

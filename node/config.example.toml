@@ -7,6 +7,10 @@ time_quality = "ntp"
 key_file = "demo-laptop.key"
 model_path = "../data/models/yamnet.tflite"
 class_map_path = "../data/models/yamnet_class_map.csv"
+# "auto": Step B (trained head, `make ml`) when data/models/drone_head.onnx exists, else Step A
+# (YAMNet class scores, the [weights] below) with a warning. "head" or "yamnet" force one.
+classifier = "auto"
+head_path = "../data/models/drone_head.onnx"
 # Outbox (unsent messages) and feature traces. Inside data/, which git ignores.
 state_dir = "../data/node-state/demo-laptop"
 

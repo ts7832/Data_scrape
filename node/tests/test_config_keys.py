@@ -76,7 +76,7 @@ def test_trace_sample_rate_must_be_a_probability(tmp_path):
 def _config_with(tmp_path, extra: str, drop_weights: bool = False) -> Path:
     text = EXAMPLE.read_text()
     if drop_weights:
-        text = text[: text.index("[weights]")]
+        text = text[: text.index("\n[weights]")]
     lines = [ln for ln in text.splitlines() if not ln.startswith(("classifier", "head_path"))]
     path = tmp_path / "c.toml"
     path.write_text(extra + "\n" + "\n".join(lines))

@@ -66,6 +66,39 @@ def test_head_probability_is_rescaled_so_its_threshold_maps_to_half():
     assert rescale_to_half(0.6, threshold=0.2) == pytest.approx(0.75)
 
 
+def test_auto_falls_back_to_yamnet_with_a_warning_when_no_head(tmp_path, caplog):
+    from dataclasses import replace
+
+    from kuulo_node.classify import YamnetClassifier
+    from kuulo_node.cli import build_classifier
+    from kuulo_node.testing import make_test_config
+
+    cfg = replace(make_test_config(tmp_path), model_path=MODELS / "yamnet.tflite",
+                  class_map_path=MODELS / "yamnet_class_map.csv", classifier="auto",
+                  head_path=tmp_path / "nope.onnx")
+    if not cfg.model_path.exists():
+        pytest.skip("model not downloaded")
+    clf, used = build_classifier(cfg)
+    assert isinstance(clf, YamnetClassifier) and used.weights == cfg.weights
+    assert "make ml" in caplog.text
+
+
+def test_head_mode_scores_the_drone_output(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    import kuulo_node.classify as classify
+    from kuulo_node.cli import build_classifier
+    from kuulo_node.testing import make_test_config
+
+    head = tmp_path / "head.onnx"
+    head.touch()
+    monkeypatch.setattr(classify, "YamnetEmbedder", lambda *a: object())
+    monkeypatch.setattr(classify, "HeadClassifier", lambda emb, path: ("head", path))
+    cfg = replace(make_test_config(tmp_path), classifier="auto", head_path=head)
+    clf, used = build_classifier(cfg)
+    assert clf == ("head", head) and used.weights == {"drone": 1.0}
+
+
 def test_build_classifier_explains_a_missing_head(tmp_path):
     from dataclasses import replace
 
@@ -89,4 +122,4 @@ def test_build_classifier_yamnet_by_default(tmp_path):
 
     cfg = replace(make_test_config(tmp_path), model_path=MODELS / "yamnet.tflite",
                   class_map_path=MODELS / "yamnet_class_map.csv")
-    assert isinstance(build_classifier(cfg), YamnetClassifier)
+    assert isinstance(build_classifier(cfg)[0], YamnetClassifier)

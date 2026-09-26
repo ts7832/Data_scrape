@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -22,16 +23,29 @@ log = logging.getLogger("kuulo.node")
 
 
 def build_classifier(cfg: NodeConfig):
-    """Step A (YAMNet class scores) or Step B (trained head on YAMNet embeddings)."""
-    from .classify import HeadClassifier, YamnetClassifier, YamnetEmbedder
+    """Step A (YAMNet class scores) or Step B (trained head on YAMNet embeddings).
 
-    if cfg.classifier == "head":
-        if cfg.head_path is None or not cfg.head_path.exists():
-            raise ValueError(f"trained head not found at {cfg.head_path}. Run `make ml` "
-                             "(or `make train` after `make datasets embed`), or set "
-                             'classifier = "yamnet".')
-        return HeadClassifier(YamnetEmbedder(cfg.model_path, cfg.class_map_path), cfg.head_path)
-    return YamnetClassifier(cfg.model_path, cfg.class_map_path, cfg.weights)
+    Returns (classifier, config): with the head, the drone score is its single "drone" output.
+    "auto" uses the head when `make ml` has produced it, and otherwise says so and uses Step A.
+    """
+    from . import classify
+
+    head_ready = cfg.head_path is not None and cfg.head_path.exists()
+    if cfg.classifier == "head" and not head_ready:
+        raise ValueError(f"trained head not found at {cfg.head_path}. Run `make ml` "
+                         "(or `make train` after `make datasets embed`), or set "
+                         'classifier = "yamnet".')
+    if cfg.classifier in ("head", "auto") and head_ready:
+        embedder = classify.YamnetEmbedder(cfg.model_path, cfg.class_map_path)
+        log.info("classifier: Step B (trained head %s)", cfg.head_path.name)
+        return classify.HeadClassifier(embedder, cfg.head_path), replace(
+            cfg, weights={"drone": 1.0})
+    if cfg.classifier == "auto":
+        log.warning("classifier: Step A (YAMNet class scores). No trained head at %s; run "
+                    "`make ml` for Step B, which detects distant drones far better "
+                    "(see ml/RESULTS.md).", cfg.head_path)
+    clf = classify.YamnetClassifier(cfg.model_path, cfg.class_map_path, cfg.weights)
+    return clf, cfg
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -57,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         log.error("YAMNet model not found at %s. Run `make model` first.", cfg.model_path)
         return 2
     try:
-        classifier = build_classifier(cfg)
+        classifier, cfg = build_classifier(cfg)
     except ValueError as exc:
         log.error("%s", exc)
         return 2

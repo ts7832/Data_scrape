@@ -36,7 +36,20 @@ def evaluate_method(scores, label, kind, threshold: float) -> dict:
     }
 
 
-def results_markdown(results: dict[str, dict], windows: int, drone_windows: int) -> str:
+def level_match(window: np.ndarray, target_db: float) -> np.ndarray:
+    """Scale a window to a target RMS level (dBFS), clipped to [-1, 1]."""
+    x = np.asarray(window, np.float64)
+    level = 20 * np.log10(np.sqrt(np.mean(x**2)) + 1e-12)
+    return np.clip(x * 10 ** ((target_db - level) / 20), -1, 1).astype(np.float32)
+
+
+def results_markdown(
+    results: dict[str, dict],
+    windows: int,
+    drone_windows: int,
+    notes: list[str] | None = None,
+    sections: list[str] | None = None,
+) -> str:
     names = list(results)
     lines = [
         "# Step A vs Step B — held-out test results",
@@ -71,4 +84,36 @@ def results_markdown(results: dict[str, dict], windows: int, drone_windows: int)
     for k in drones:
         cells = " | ".join(f"{results[n]['recall_by_drone'].get(k, 0):.3f}" for n in names)
         lines.append(f"| {k} | {cells} |")
+    for section in sections or []:
+        lines += ["", section.rstrip()]
+    if notes:
+        lines += ["", "## Notes", ""] + [f"- {n}" for n in notes]
     return "\n".join(lines) + "\n"
+
+
+def first_start_s(scores, threshold: float = 0.5) -> float | None:
+    """Audio time at which the node's smoother would emit START for these window scores."""
+    from kuulo_node.audio import HOP_S, WINDOW_SAMPLES
+    from kuulo_protocol.models import Phase
+    from kuulo_protocol.smoothing import DetectionSmoother, SmootherConfig
+
+    smoother = DetectionSmoother(SmootherConfig(threshold=threshold))
+    for i, score in enumerate(scores):
+        if smoother.push(i * HOP_S, float(score)) is Phase.START:
+            return i * HOP_S + WINDOW_SAMPLES / 16_000
+    return None
+
+
+def event_summary(rows) -> dict:
+    """rows: (label, kind, first_start_s or None) per recording."""
+    drone = [s for label, _, s in rows if label == 1]
+    hits = [s for s in drone if s is not None]
+    hard = [s for label, kind, s in rows if label == 0 and kind in HARD_NEGATIVES]
+    other = [s for label, kind, s in rows if label == 0 and kind not in HARD_NEGATIVES]
+    return {
+        "drone_detected": len(hits), "drone_total": len(drone),
+        "median_start_s": float(np.median(hits)) if hits else None,
+        "max_start_s": float(max(hits)) if hits else None,
+        "hard_false_starts": sum(s is not None for s in hard), "hard_total": len(hard),
+        "other_false_starts": sum(s is not None for s in other), "other_total": len(other),
+    }

@@ -14,7 +14,7 @@ class ConfigError(ValueError):
     pass
 
 
-CLASSIFIERS = ("yamnet", "head")
+CLASSIFIERS = ("yamnet", "head", "auto")
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,7 @@ class NodeConfig:
     weights: dict[str, float]
     state_dir: Path  # outbox and feature traces; never inside the repository's tracked files
     traces: TraceConfig = TraceConfig()
-    classifier: str = "yamnet"  # "yamnet" (Step A) or "head" (Step B)
+    classifier: str = "yamnet"  # "yamnet" (Step A), "head" (Step B), "auto" (B if trained)
     head_path: Path | None = None
 
 

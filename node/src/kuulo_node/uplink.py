@@ -1,10 +1,9 @@
-"""HTTP uplink: register once, then send messages in order with bounded retry and backoff."""
+"""HTTP uplink: register once, then deliver the durable outbox in order with backoff."""
 
 from __future__ import annotations
 
 import logging
 import time
-from collections import deque
 from collections.abc import Callable
 
 import httpx
@@ -12,8 +11,10 @@ from pydantic import BaseModel
 
 from kuulo_protocol.models import NodeRegistration
 
+from .outbox import Outbox
+
 log = logging.getLogger("kuulo.node")
-HEARTBEATS = "/v1/heartbeats"
+OBSERVATIONS = "/v1/observations"
 
 
 class RegistrationConflict(RuntimeError):
@@ -21,27 +22,35 @@ class RegistrationConflict(RuntimeError):
 
 
 class Uplink:
+    """Sends outbox messages in order: runs of observations as one batch, heartbeats singly."""
+
     def __init__(
         self,
         client: httpx.Client,
         *,
-        max_pending: int = 1000,
+        outbox: Outbox | None = None,
+        max_pending: int = 10_000,
+        max_batch: int = 100,
         monotonic: Callable[[], float] = time.monotonic,
         backoff_max_s: float = 30.0,
     ) -> None:
         self.client = client
-        self.max_pending = max_pending
+        self.outbox = outbox if outbox is not None else Outbox(cap=max_pending)
+        self.max_batch = max_batch
         self._monotonic = monotonic
         self._backoff_max = backoff_max_s
         self._backoff = 1.0
         self._next_try = 0.0
-        self._pending: deque[tuple[str, BaseModel]] = deque()
         self.registered = False
-        self.dropped = 0
+        self._rejected = 0
 
     @property
     def pending_count(self) -> int:
-        return len(self._pending)
+        return len(self.outbox)
+
+    @property
+    def dropped(self) -> int:
+        return self.outbox.dropped + self._rejected
 
     def _due(self) -> bool:
         return self._monotonic() >= self._next_try
@@ -81,34 +90,65 @@ class Uplink:
         return True
 
     def send(self, path: str, msg: BaseModel) -> None:
-        if len(self._pending) >= self.max_pending:
-            idx = next((i for i, (p, _) in enumerate(self._pending) if p == HEARTBEATS), 0)
-            del self._pending[idx]
-            self.dropped += 1
-            log.warning("uplink queue full; dropped 1 message (%d dropped so far)", self.dropped)
-        self._pending.append((path, msg))
+        self.outbox.put(path, msg.model_dump_json())
+
+    def _reject(self, path: str, why: str) -> None:
+        self._rejected += 1
+        log.error("server rejected %s: %s", path, why[:200])
+
+    def _next_run(self) -> list[tuple[int, str, str]]:
+        rows = self.outbox.peek(self.max_batch)
+        if not rows or rows[0][1] != OBSERVATIONS:
+            return rows[:1]
+        run = []
+        for row in rows:
+            if row[1] != OBSERVATIONS:
+                break
+            run.append(row)
+        return run
+
+    def _post(self, path: str, content: str) -> httpx.Response | None:
+        try:
+            r = self.client.post(path, content=content,
+                                 headers={"content-type": "application/json"})
+        except httpx.TransportError as exc:
+            self._fail(str(exc))
+            return None
+        if r.status_code >= 500:
+            self._fail(f"HTTP {r.status_code}")
+            return None
+        return r
 
     def flush(self, force: bool = False) -> None:
         if not self.registered or (not force and not self._due()):
             return
-        while self._pending:
-            path, msg = self._pending[0]
-            try:
-                r = self.client.post(
-                    path, content=msg.model_dump_json(),
-                    headers={"content-type": "application/json"},
-                )
-            except httpx.TransportError as exc:
-                self._fail(str(exc))
-                return
-            if r.status_code >= 500:
-                self._fail(f"HTTP {r.status_code}")
+        while run := self._next_run():
+            path = run[0][1]
+            batch = path == OBSERVATIONS
+            content = "[" + ",".join(body for _, _, body in run) + "]" if batch else run[0][2]
+            r = self._post(path, content)
+            if r is None:
                 return
             if r.status_code == 401:  # server forgot us (fresh database): register again
                 self.registered = False
                 return
-            self._pending.popleft()
             if r.status_code >= 400:
-                self.dropped += 1
-                log.error("server rejected %s: HTTP %d %s", path, r.status_code, r.text[:200])
+                for _ in run:
+                    self._reject(path, f"HTTP {r.status_code} {r.text}")
+                self.outbox.delete([row_id for row_id, _, _ in run])
+                continue
+            if not batch:
+                self.outbox.delete([run[0][0]])
+                continue
+            done = []
+            for (row_id, _, _), result in zip(run, r.json(), strict=True):
+                reason = str(result.get("reason", ""))
+                if result.get("status") == "rejected" and reason.startswith("unknown node"):
+                    self.outbox.delete(done)
+                    self.registered = False
+                    return
+                if result.get("status") == "rejected":
+                    self._reject(path, reason)
+                done.append(row_id)
+            self.outbox.delete(done)
         self._ok()

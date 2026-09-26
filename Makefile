@@ -47,10 +47,10 @@ node: $(NODE_CONFIG)
 # a forbidden file committed and later deleted would pass a tree-only check. The coordinate
 # scan below stays informational, not a hard failure -- read it yourself before publishing.
 prepublish:
-	@! git ls-files | grep -E '\.(wav|flac|mp3|tflite|onnx|db|key)$$|(^|/)data/|\.local\.toml$$' \
+	@! git ls-files | grep -E '\.(wav|flac|mp3|tflite|onnx|db|key)$$|(^|/)data/|\.local\.toml$$|-state/' \
 		|| (echo "FAIL: forbidden files are tracked (see above)"; exit 1)
 	@! git log --all --name-only --pretty=format: | sort -u \
-		| grep -E '\.(wav|flac|mp3|tflite|onnx|db|key)$$|(^|/)data/|\.local\.toml$$' \
+		| grep -E '\.(wav|flac|mp3|tflite|onnx|db|key)$$|(^|/)data/|\.local\.toml$$|-state/' \
 		|| (echo "FAIL: forbidden files exist somewhere in git history (see above)"; exit 1)
 	@echo "Tracked coordinates -- read this yourself, it is not an automated check. Every"
 	@echo "entry must be simulated, a test fixture, or the demo location 60.1694, 24.9490:"

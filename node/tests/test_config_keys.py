@@ -45,3 +45,15 @@ def test_keys_are_created_once_and_reused(tmp_path):
     assert first == second
     assert json.loads(path.read_text())["public_key"] == first.public_key
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_example_state_dir_is_inside_gitignored_data():
+    cfg = load_config(EXAMPLE)
+    assert cfg.state_dir == (EXAMPLE.parent / "../data/node-state/demo-laptop").resolve()
+
+
+def test_state_dir_defaults_next_to_config(tmp_path):
+    lines = [ln for ln in EXAMPLE.read_text().splitlines() if not ln.startswith("state_dir")]
+    path = tmp_path / "c.toml"
+    path.write_text("\n".join(lines))
+    assert load_config(path).state_dir == tmp_path / "demo-laptop-state"

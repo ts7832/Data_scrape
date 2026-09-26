@@ -12,6 +12,7 @@ import httpx
 from .audio import mic_source, wav_source
 from .config import ConfigError, load_config
 from .keys import load_or_create_keys
+from .outbox import Outbox
 from .runner import NodeRunner
 from .uplink import RegistrationConflict, Uplink
 
@@ -46,7 +47,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     keys = load_or_create_keys(cfg.key_file)
     with httpx.Client(base_url=cfg.server_url, timeout=5.0) as client:
-        runner = NodeRunner(cfg, keys, classifier, Uplink(client), print_scores=args.print_scores)
+        outbox = Outbox(cfg.state_dir / "outbox.db")
+        if len(outbox):
+            log.info("%d unsent messages from a previous run will be delivered", len(outbox))
+        uplink = Uplink(client, outbox=outbox)
+        runner = NodeRunner(cfg, keys, classifier, uplink, print_scores=args.print_scores)
         if args.input:
             blocks = wav_source(args.input, speed=args.speed)
         else:

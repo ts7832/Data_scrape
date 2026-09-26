@@ -28,6 +28,7 @@ data/
 # Node: local configs and keys are personal (real locations, private keys)
 node/*.local.toml
 node/*.key
+node/*-state/
 
 # OS
 .DS_Store

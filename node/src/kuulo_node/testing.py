@@ -24,5 +24,6 @@ def make_test_config(tmp_path: Path, **overrides) -> NodeConfig:
         class_map_path=tmp_path / "missing.csv",
         smoother=SmootherConfig(),
         weights={PROPELLER: 1.0, "Helicopter": 0.8},
+        state_dir=tmp_path / "state",
     )
     return replace(cfg, **overrides)

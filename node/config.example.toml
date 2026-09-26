@@ -7,6 +7,8 @@ time_quality = "ntp"
 key_file = "demo-laptop.key"
 model_path = "../data/models/yamnet.tflite"
 class_map_path = "../data/models/yamnet_class_map.csv"
+# Outbox (unsent messages) and feature traces. Inside data/, which git ignores.
+state_dir = "../data/node-state/demo-laptop"
 
 # Reported sensor position. Demo value: University of Helsinki main building,
 # city centre campus. Never commit a real node location.

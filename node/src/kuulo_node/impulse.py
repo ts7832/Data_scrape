@@ -23,7 +23,8 @@ from .audio import AudioBlock
 FRAME = 32  # 2 ms energy frames
 PRE_S = 0.25  # audio kept from before the trigger, for onset picking
 WARM_S = 0.5
-SIGMA_RISE_FACTOR = 0.25
+SIGMA_RISE_FACTOR = 50.0
+SIGMA_MAX_S = 0.05  # calibrated against real-audio evaluation (spec: real-audio evaluation)
 
 
 @dataclass(frozen=True)
@@ -177,7 +178,7 @@ class ImpulseDetector:
                 or active < cfg.min_active_bands):
             self._reject(tail)
             return None
-        sigma = min(0.02, max(2 / SR, SIGMA_RISE_FACTOR * rise_s))
+        sigma = min(SIGMA_MAX_S, max(2 / SR, SIGMA_RISE_FACTOR * rise_s))
         features = ImpulseFeatures(
             peak_dbfs=round(peak_dbfs, 2),
             snr_db=round(min(150.0, max(-50.0, _db(float(energies.max()) / self._lta))), 2),

@@ -212,6 +212,29 @@ def _event_table(events: dict[str, dict]) -> str:
     return "\n".join(rows)
 
 
+def cmd_impulses(_args) -> int:
+    """Real-audio evaluation of the node's impulse detector (spec: real-audio evaluation)."""
+    import json
+
+    from .datasets import manifest
+    from .embed import load_16k
+    from .impulses import CONTINUOUS, IMPULSIVE, evaluate, report_markdown
+
+    clips = manifest(DATASETS)
+    positives = [load_16k(c.path) for c in clips if c.kind in IMPULSIVE]
+    continuous = [load_16k(c.path) for c in clips if c.kind in CONTINUOUS]
+    drones = [load_16k(c.path) for c in clips if c.label == 1]
+    print(f"{len(positives)} positive (impulsive) clips, {len(continuous)} continuous ESC-50 "
+          f"clips, {len(drones)} drone recordings", flush=True)
+    rng = np.random.default_rng(0)
+    results = evaluate(positives, continuous, continuous + drones, rng)
+    text = report_markdown(results)
+    (REPO / "ml" / "IMPULSE_RESULTS.md").write_text(text)
+    (FEATURES / "impulse_results.json").write_text(json.dumps(results, indent=2))
+    print(text)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kuulo-ml")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -221,9 +244,11 @@ def main(argv: list[str] | None = None) -> int:
     train = sub.add_parser("train", help="fit the Step B head and export ONNX")
     train.add_argument("--seed", type=int, default=0)
     sub.add_parser("evaluate", help="Step A vs Step B on the held-out test set -> ml/RESULTS.md")
+    sub.add_parser("impulses",
+                   help="real-audio impulse detector evaluation -> ml/IMPULSE_RESULTS.md")
     args = parser.parse_args(argv)
     commands = {"datasets": cmd_datasets, "embed": cmd_embed, "train": cmd_train,
-                "evaluate": cmd_evaluate}
+                "evaluate": cmd_evaluate, "impulses": cmd_impulses}
     return commands[args.cmd](args)
 
 

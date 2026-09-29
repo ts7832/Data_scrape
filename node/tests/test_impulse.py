@@ -45,7 +45,7 @@ def test_aic_finds_the_change_point():
 def test_one_bang_one_report_with_sub_millisecond_onset():
     [c] = run(place(noise(6), burst(), 3.0))
     assert abs((c.onset_utc - (T0 + timedelta(seconds=3.0))).total_seconds()) < 0.001
-    assert 0 < c.onset_sigma_s <= 0.02
+    assert 0 < c.onset_sigma_s <= 0.05
     assert c.features.peak_dbfs > -10 and c.features.rise_time_ms < 5 and not c.features.clipped
 
 

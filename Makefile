@@ -1,4 +1,4 @@
-.PHONY: dev server dashboard sim test types node model prepublish datasets embed train evaluate ml
+.PHONY: dev server dashboard sim test types node model prepublish datasets embed train evaluate ml impulse-eval
 
 SCENARIO ?= helsinki_pass
 SPEED ?= 1
@@ -52,6 +52,9 @@ train:
 
 evaluate:
 	uv run --no-sync kuulo-ml evaluate
+
+impulse-eval: datasets
+	uv run --no-sync kuulo-ml impulses
 
 ml: datasets embed train evaluate
 

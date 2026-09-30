@@ -1,7 +1,7 @@
 # Kuulo — Impulse Events: Design Spec (public part)
 
 **Date:** 2026-09-26
-**Status:** Approved in conversation, awaiting the user's review of the plan
+**Status:** Implemented
 **Parent spec:** `2026-09-24-kuulo-milestone1-design.md`
 **Plan:** `../plans/2026-09-26-kuulo-impulse-events.md`
 

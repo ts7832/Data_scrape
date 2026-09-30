@@ -1,5 +1,57 @@
 # Kuulo progress
 
+## Part 4 (2026-09-29): Impulse events
+
+Plan: `docs/superpowers/plans/2026-09-26-kuulo-impulse-events.md`. Spec:
+`docs/superpowers/specs/2026-09-26-kuulo-impulse-events-design.md` (status: Implemented).
+
+- **Wire protocol and node detector:** `kuulo_protocol.impulses` (`ImpulseReport`,
+  `ImpulseEvent`, `Ellipse`, `ImpulseKind`, `LocationQuality`, `speed_of_sound`); node-side
+  `ImpulseDetector` — an STA/LTA trigger plus a Maeda-1985 AIC onset picker, reporting only an
+  onset time, its calibrated uncertainty and coarse summary features. No waveform leaves the
+  node.
+- **Server:** ingest and grouping (`server/src/kuulo_server/impact/`), a coarse public locator
+  (centroid-of-sensors circle, always `UNASSOCIATED`), and a `KUULO_IMPULSE_LOCATOR` plug-in
+  point — the same pattern as `KUULO_FUSION_ENGINE` — for an optional, more capable private
+  locator to do real multilateration and drone-impact attribution.
+- **CAP 1.2 export:** `GET /v1/impulse-events/{id}/cap`, `status="Test"` by default.
+- **Simulator:** `impact_strike` (a drone track ending in an impulse) and `firework` (a
+  standalone, unattributed bang) bundled scenarios.
+- **Dashboard:** IMPACT (red, drone-attributed) vs IMPULSE (orange, unassociated) map markers
+  and detail panel.
+- **Real-audio evaluation of the node detector** (`ml/src/kuulo_ml/impulses.py`,
+  `make impulse-eval` → `ml/IMPULSE_RESULTS.md`): ESC-50 fireworks/glass-breaking/door-knock
+  clips as a blast proxy (no licensed blast recordings exist), mixed into ESC-50 continuous
+  sounds and DroneNoise recordings at controlled SNR. `onset_sigma_s` is a genuine per-event
+  confidence from the AIC onset picker's own curvature (tighter for a clean onset, looser for a
+  noisy one — measurably SNR-dependent), scaled by a calibration constant (`SIGMA_SCALE`) to
+  match real error; a first version instead derived it from a fixed multiple of rise time,
+  which passed the same coverage target only by inflating every report toward one ceiling
+  regardless of onset clarity — a final-review finding, replaced during that review's fix pass.
+  At ≥20 dB SNR, ≥90 % of *non-gross* onset errors (i.e. excluding wrong-event mis-picks, which
+  a per-event sigma cannot represent and a downstream locator must reject separately) fall
+  within the reported 2σ (91.1 % at 30 dB, 95.7 % at 20 dB, 100 % at 10 dB). Full reasoning is
+  in the SDD ledger's Task 9 and final-review rulings and in `ml/IMPULSE_RESULTS.md`'s own
+  Calibration section.
+- **Private engine split:** the precise TDOA multilateration solver and drone-attribution logic
+  live in a separate, never-published private repository, loaded only through the
+  `KUULO_IMPULSE_LOCATOR` plug-in point — this repository never imports it and contains no
+  reference to its package name.
+- 331 Python tests, 31 dashboard tests, all built test-first per the executing-plans skill.
+- **Final whole-branch review** (fresh reviewer, most capable model): one Critical finding (a
+  private-repo name accidentally left in this file's own first draft) and four Important
+  findings (the sigma-calibration issue above; the impulse locator not isolating persist/publish
+  from a misbehaving plug-in, so ingest could get stuck; the dashboard not logging an IMPACT
+  escalation when an event's quality doesn't also change; the private repo's name pre-existing
+  in a Part-1 spec doc) were all fixed in one pass, each with a failing test first. 13 Minor
+  findings were deferred — see the ledger and this branch's final message for the full list.
+
+Still needs a person: the dashboard demo GIF, pushing this branch and creating/pushing the
+private repository (both denied to the agent by repository/`gh` settings), and a real-microphone
+trial of the impulse detector against a real bang in a city.
+
+---
+
 ## Part 3 (2026-09-26): Milestone 1 completion
 
 Plan: `docs/superpowers/plans/2026-09-26-kuulo-part3-milestone1-completion.md`.

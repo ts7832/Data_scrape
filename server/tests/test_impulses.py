@@ -99,6 +99,23 @@ def test_a_crashing_locator_does_not_break_ingest(tmp_path):
         assert c.get("/v1/impulse-events").json() == []
 
 
+def test_a_locator_returning_a_malformed_event_does_not_break_ingest(tmp_path):
+    class Malformed:
+        def __init__(self, *_):
+            pass
+
+        def on_report(self, *_):
+            return "not an ImpulseEvent"  # e.g. a buggy plugin's wrong return type
+
+    app = create_app(Settings(db_path=tmp_path / "k.db", clock=FakeClock(T0), tick_interval_s=None,
+                              impulse_locator=_plugin("malformed_locator", Malformed)))
+    with TestClient(app) as c:
+        keys = register(c, "s0")
+        r = make_impulse_report("s0", onset_at=T0, lat=60.17, lon=24.94)
+        assert post_signed(c, "/v1/impulses", r, keys.private_key).status_code == 200
+        assert c.get("/v1/impulse-events").json() == []
+
+
 def test_the_plugin_receives_the_locator_config(tmp_path):
     seen = []
 

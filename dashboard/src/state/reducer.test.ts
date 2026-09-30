@@ -116,4 +116,14 @@ describe("reducer", () => {
     s = reducer(s, { type: "live", receivedAt: 2, event: { type: "impulse_event", data: impact } });
     expect(s.events.length).toBe(afterFirst);
   });
+
+  it("logs an IMPACT escalation even when quality does not change", () => {
+    const unassociated: ImpulseEvent = { ...impact, kind: "unassociated" };
+    let s = reducer(initialState, { type: "live", receivedAt: 1,
+      event: { type: "impulse_event", data: unassociated } });
+    expect(s.events[0].message).toMatch(/^IMPULSE/);
+    s = reducer(s, { type: "live", receivedAt: 2,
+      event: { type: "impulse_event", data: { ...unassociated, kind: "drone_impact" } } });
+    expect(s.events[0].message).toMatch(/^IMPACT/);
+  });
 });

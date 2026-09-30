@@ -23,8 +23,13 @@ from .audio import AudioBlock
 FRAME = 32  # 2 ms energy frames
 PRE_S = 0.25  # audio kept from before the trigger, for onset picking
 WARM_S = 0.5
-SIGMA_RISE_FACTOR = 50.0
-SIGMA_MAX_S = 0.05  # calibrated against real-audio evaluation (spec: real-audio evaluation)
+# The AIC curve's own curvature genuinely varies with SNR (tighter for a cleaner onset) but its
+# raw scale, on real audio, runs far below real onset-timing error -- SIGMA_SCALE brings the
+# scale in line with measured error while preserving that per-event differentiation, unlike a
+# fixed ceiling that would erase it. Both calibrated against real-audio evaluation.
+SIGMA_SCALE = 150.0
+SIGMA_MIN_S = 1e-5
+SIGMA_MAX_S = 0.05
 
 
 @dataclass(frozen=True)
@@ -49,17 +54,45 @@ class ImpulseCandidate:
     features: ImpulseFeatures
 
 
-def aic_pick(x: np.ndarray) -> int:
-    """Onset index in x (Maeda 1985): argmin of k*log var(x[:k]) + (n-k-1)*log var(x[k:])."""
+def _aic_curve(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """(k, aic) for k in [4, n-4): Maeda 1985's change-point statistic over x."""
     n = x.size
     if n < 16:
-        return 0
+        return np.zeros(1, np.int64), np.zeros(1)
     c1, c2 = np.cumsum(x), np.cumsum(x * x)
     k = np.arange(4, n - 4)
     v1 = c2[k - 1] / k - (c1[k - 1] / k) ** 2
     v2 = (c2[-1] - c2[k - 1]) / (n - k) - ((c1[-1] - c1[k - 1]) / (n - k)) ** 2
     aic = k * np.log(np.maximum(v1, 1e-20)) + (n - k - 1) * np.log(np.maximum(v2, 1e-20))
+    return k, aic
+
+
+def aic_pick(x: np.ndarray) -> int:
+    """Onset index in x (Maeda 1985): argmin of k*log var(x[:k]) + (n-k-1)*log var(x[k:])."""
+    k, aic = _aic_curve(x)
     return int(k[np.argmin(aic)])
+
+
+def aic_sigma(x: np.ndarray) -> float:
+    """Onset-time uncertainty in samples, from how sharply the AIC curve pins the change point.
+
+    AIC differences approximate log-likelihood-ratio differences between "the change is at k"
+    and "the change is at the true k" (Maeda 1985), so exp(-(aic - aic.min()) / 2) is an
+    unnormalised distribution over candidate onsets; its standard deviation is a genuine
+    per-event confidence. A clean, sudden onset gives a narrow, deep minimum (small sigma); a
+    noisy or gradual one gives a shallow, broad minimum (large sigma) -- this tracks the actual
+    data, unlike a fixed multiple of rise time (spec: real-audio evaluation, calibration).
+    """
+    k, aic = _aic_curve(x)
+    if k.size < 2:
+        return 0.0
+    w = np.exp(-(aic - aic.min()) / 2)
+    total = w.sum()
+    if total <= 0:
+        return 0.0
+    w = w / total
+    mean_k = float(np.sum(w * k))
+    return float(np.sqrt(np.sum(w * (k - mean_k) ** 2)))
 
 
 def _db(x: float) -> float:
@@ -159,7 +192,9 @@ class ImpulseDetector:
             self._reject(tail)
             return None
         a_lo = max(0, (trigger - lo) - int(0.1 * SR))
-        onset = a_lo + aic_pick(hp[a_lo: peak + 1])
+        pick_window = hp[a_lo: peak + 1]
+        onset = a_lo + aic_pick(pick_window)
+        sigma = min(SIGMA_MAX_S, max(SIGMA_MIN_S, SIGMA_SCALE * aic_sigma(pick_window) / SR))
         env = np.sqrt(np.convolve(hp ** 2, np.ones(16) / 16, mode="same"))
         top = float(env[onset: peak + 16].max())
         rise_idx = np.nonzero(env[onset:] >= 0.9 * top)[0]
@@ -178,7 +213,6 @@ class ImpulseDetector:
                 or active < cfg.min_active_bands):
             self._reject(tail)
             return None
-        sigma = min(SIGMA_MAX_S, max(2 / SR, SIGMA_RISE_FACTOR * rise_s))
         features = ImpulseFeatures(
             peak_dbfs=round(peak_dbfs, 2),
             snr_db=round(min(150.0, max(-50.0, _db(float(energies.max()) / self._lta))), 2),

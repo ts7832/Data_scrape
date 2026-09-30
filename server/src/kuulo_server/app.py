@@ -125,14 +125,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def run_locator(report: ImpulseReport) -> None:
         try:
             event = locator.on_report(report, DbImpulseContext(sessions, settings.clock()))
+            if event is None:
+                return
+            with sessions() as session:
+                persist_impulse_event(session, event)
+            hub.publish(LiveEvent(type="impulse_event", data=event))
         except Exception:
             log.exception("impulse locator failed; ingest continues")
-            return
-        if event is None:
-            return
-        with sessions() as session:
-            persist_impulse_event(session, event)
-        hub.publish(LiveEvent(type="impulse_event", data=event))
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):

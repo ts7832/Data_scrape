@@ -39,7 +39,7 @@ fusion engine, military-drone (Shahed-class) accuracy.
 
 ## 2. Open-core boundary
 
-| Public repo (`kuulo`, AGPL-3.0) | Private (later, `kuulo-fusion`) |
+| Public repo (`kuulo`, AGPL-3.0) | Private (a separate, never-published repo) |
 |---|---|
 | protocol, node software, baseline model, training scripts | advanced fusion engine (TDOA, Kalman/MHT, trust scores) |
 | server, basic fusion, dashboard, simulator | models trained on network data |

@@ -5,7 +5,7 @@ import pytest
 
 from kuulo_node.audio import SAMPLE_RATE as SR
 from kuulo_node.audio import AudioBlock
-from kuulo_node.impulse import ImpulseConfig, ImpulseDetector, aic_pick
+from kuulo_node.impulse import ImpulseConfig, ImpulseDetector, aic_pick, aic_sigma
 
 T0 = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
 
@@ -42,10 +42,21 @@ def test_aic_finds_the_change_point():
     assert abs(aic_pick(x.astype(np.float64)) - int(0.05 * SR)) <= 8
 
 
+def test_aic_sigma_is_tight_for_a_sharp_change_and_loose_for_a_subtle_one():
+    sharp = np.concatenate(
+        [noise(0.05, level=0.001), burst(amp=0.5, seconds=0.05)]).astype(np.float64)
+    subtle = np.concatenate(
+        [noise(0.05, level=0.05), burst(amp=0.06, seconds=0.05)]).astype(np.float64)
+    assert aic_sigma(sharp) < aic_sigma(subtle)
+    assert aic_sigma(sharp) / SR < 0.001  # sub-millisecond for an unambiguous change point
+
+
 def test_one_bang_one_report_with_sub_millisecond_onset():
     [c] = run(place(noise(6), burst(), 3.0))
     assert abs((c.onset_utc - (T0 + timedelta(seconds=3.0))).total_seconds()) < 0.001
-    assert 0 < c.onset_sigma_s <= 0.05
+    # A clean, high-SNR onset like this one should report a tight sigma: the AIC curve pins it
+    # sharply, so sigma should track the true (near-zero) error, not sit at some fixed ceiling.
+    assert 0 < c.onset_sigma_s <= 0.001
     assert c.features.peak_dbfs > -10 and c.features.rise_time_ms < 5 and not c.features.clipped
 
 

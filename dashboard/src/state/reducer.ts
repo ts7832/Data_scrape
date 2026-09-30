@@ -137,7 +137,7 @@ export function reducer(state: State, action: Action): State {
           const e = event.data as ImpulseEvent;
           const previous = state.impulses[e.event_id];
           const next = upsertImpulse(state, e);
-          if (previous && previous.quality === e.quality) return next;
+          if (previous && previous.quality === e.quality && previous.kind === e.kind) return next;
           const label = e.kind === "drone_impact" ? "IMPACT" : "IMPULSE";
           const message = `${label} ${e.node_ids.length} SENSORS ±${Math.round(e.ellipse.semi_major_m)} M`;
           return log(next, action.receivedAt, shortImpulseId(e.event_id), message,

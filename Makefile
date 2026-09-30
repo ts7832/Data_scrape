@@ -73,4 +73,6 @@ prepublish:
 	@echo "Tracked coordinates -- read this yourself, it is not an automated check. Every"
 	@echo "entry must be simulated, a test fixture, or the demo location 60.1694, 24.9490:"
 	@git grep -nE 'lat[" =:]+[0-9]{2}\.[0-9]{3}' -- ':!docs' | cut -c1-120
+	@! git grep -niE 'kuulo[_-]fusion' | grep -v 'KUULO_FUSION_ENGINE' \
+		|| (echo "FAIL: the private repo's name is referenced in the tree (see above)"; exit 1)
 	@echo "OK: no audio, models, keys, databases or local configs are tracked, now or in history."

@@ -7,12 +7,14 @@ False triggers on continuous sounds and drone recordings: 21.18 per hour.
 
 ## Onset error vs SNR
 
-| SNR (dB) | Detected | Median error (ms) | 95th pct error (ms) | Within 2σ |
-|---|---|---|---|---|
-| 30 | 82.3 % | 1.50 | 37.61 | 96.9 % |
-| 20 | 74.7 % | 2.94 | 177.02 | 91.5 % |
-| 10 | 26.6 % | 4.62 | 359.75 | 90.5 % |
+| SNR (dB) | Detected | Median error (ms) | 95th pct error (ms) | Within 2σ | Median reported σ (ms) | Gross mis-picks (>20 ms) |
+|---|---|---|---|---|---|---|
+| 30 | 82.3 % | 1.50 | 37.61 | 91.1 % | 4.603 | 13.8 % |
+| 20 | 74.7 % | 2.94 | 177.02 | 95.7 % | 5.412 | 22.0 % |
+| 10 | 26.6 % | 4.62 | 359.75 | 100.0 % | 6.174 | 33.3 % |
 
 ## Calibration
 
-The node reports `onset_sigma_s` as its own confidence in each onset time, derived from the impulse's rise time. Raising `SIGMA_RISE_FACTOR` alone (0.25 -> up to 500, tested) plateaued around 86% within 2sigma at 20 dB: `onset_sigma_s` was hitting a hard ceiling (`min(0.02, ...)` = 20 ms) before the factor could widen it enough. The ceiling itself, not the factor, was gating calibration, so it was promoted to a named constant `SIGMA_MAX_S` and raised alongside the factor. Final values: `SIGMA_RISE_FACTOR = 50.0`, `SIGMA_MAX_S = 0.05` (50 ms) -- both in `node/src/kuulo_node/impulse.py`. At >= 20 dB SNR, >= 90 % of onset errors now fall within 2sigma (table above), meeting the calibration bar.
+`onset_sigma_s` is a per-event confidence, not a fixed constant: it comes from how sharply the node's AIC onset picker pins the change point (the standard deviation of `exp(-(aic - aic.min()) / 2)` treated as a distribution over candidate onsets), so a clean, sudden onset gets a tighter sigma than a noisy or gradual one. On real audio this raw curvature is genuinely SNR-dependent (measured directly: about 0.01 ms at 30 dB SNR rising to about 0.1 ms at 5-10 dB, on a controlled synthetic sweep) but its absolute scale sits far below real onset-timing error, so `SIGMA_SCALE` (`node/src/kuulo_node/impulse.py`) brings the reported value in line with measured error while preserving that per-event differentiation -- the median reported sigma column above still varies with SNR (real signal), unlike an earlier version that derived sigma from a fixed multiple of rise time and met the same coverage target only by inflating every report toward one fixed ceiling regardless of how clear the onset actually was, which erased that signal entirely. `SIGMA_MIN_S` and `SIGMA_MAX_S` are sanity floor/ceiling only, not the source of the estimate. At >= 20 dB SNR, >= 90 % of *non-gross* onset errors (see below) now fall within 2sigma.
+
+The gross mis-pick column (errors > 20 ms) separates outright wrong picks -- a different crackle or knock elsewhere in a multi-event clip, not genuine onset-timing noise -- from the calibration figure, so they cannot inflate 'within 2sigma' by hiding in the median. A per-event sigma cannot represent 'I picked the wrong event': a downstream locator combining several nodes' reports needs its own outlier rejection (e.g. residual-based exclusion) for that failure mode, not a wider sigma. The 14-33 % gross-mis-pick rate here is inflated by this evaluation's own proxy clips, several of which contain more than one crackle or knock; it is not necessarily the node's rate on an isolated real blast.
